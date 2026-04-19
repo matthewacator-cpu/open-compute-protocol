@@ -110,7 +110,7 @@ On machine two:
 OCP_HOST=0.0.0.0 OCP_PORT=8422 OCP_NODE_ID=beta-node OCP_DISPLAY_NAME=Beta python3 scripts/start_ocp_easy.py
 ```
 
-Then open `http://HOST_IP:8421/` on each machine and use `Connect Everything`, then `Send Test Mission`.
+Then open `http://HOST_IP:8421/` on each machine and use `Connect Everything`, then `Test Whole Mesh`.
 
 If scan does not immediately find the other machine, use `Copy My Easy Link` on one computer and paste that address into the manual connect box on the other one.
 You can also scan the QR code from the easy page on the other device and open the pairing link that way.

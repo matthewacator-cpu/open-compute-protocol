@@ -1137,6 +1137,9 @@ class MeshPeerClient:
     def launch_test_mission(self, payload: dict) -> dict:
         return self._request_json("POST", "/mesh/missions/test-launch", payload=payload)
 
+    def launch_mesh_test_mission(self, payload: Optional[dict] = None) -> dict:
+        return self._request_json("POST", "/mesh/missions/test-mesh-launch", payload=payload or {})
+
     def cancel_mission(self, mission_id: str, *, reason: str = "mission_cancelled", operator_id: str = "") -> dict:
         payload = {"reason": reason}
         if operator_id:
@@ -3164,6 +3167,84 @@ class SovereignMesh:
             "base_url": _normalize_base_url(base_url) or str(((connection or {}).get("base_url")) or ""),
             "proof": {"filename": proof_filename, "location_hint": "system temp directory"},
             "connection": connection or {},
+            "mission": mission,
+        }
+
+    def launch_mesh_test_mission(
+        self,
+        *,
+        include_local: bool = True,
+        limit: int = 24,
+        request_id: Optional[str] = None,
+    ) -> dict:
+        peer_snapshot = self.list_peers(limit=max(limit, 24))
+        connected_peers = list(peer_snapshot.get("peers") or [])
+        target_peer_ids: list[str] = []
+        if include_local:
+            target_peer_ids.append(self.node_id)
+        for peer in connected_peers:
+            peer_id = str(peer.get("peer_id") or "").strip()
+            if peer_id and peer_id not in target_peer_ids:
+                target_peer_ids.append(peer_id)
+        if not target_peer_ids:
+            raise MeshPolicyError("mesh test mission requires at least one reachable device")
+
+        proof_filename = "ocp_connect_proof.txt"
+        proof_code = (
+            "from pathlib import Path\n"
+            "import tempfile\n"
+            "path = Path(tempfile.gettempdir()) / 'ocp_connect_proof.txt'\n"
+            "path.write_text('mission ran on remote helper\\n')\n"
+            "print(str(path))\n"
+            "print(path.read_text().strip())\n"
+        )
+        mission = self.launch_mission(
+            title="Whole Mesh Test Mission",
+            intent="Verify cooperative execution across every device currently connected to this sovereign mesh.",
+            request_id=(request_id or f"mesh-wide-test-mission-{uuid.uuid4().hex[:12]}").strip(),
+            priority="high",
+            workload_class="connectivity_test",
+            target_strategy="cooperative_spread",
+            continuity={"resumable": True},
+            metadata={
+                "control_flow": "connect_devices",
+                "test_mission": True,
+                "mesh_wide_test": True,
+                "proof_filename": proof_filename,
+                "target_peer_ids": list(target_peer_ids),
+            },
+            cooperative_task={
+                "name": "mesh-wide-remote-proof",
+                "strategy": "spread",
+                "allow_local": include_local,
+                "allow_remote": True,
+                "target_peer_ids": list(target_peer_ids),
+                "base_job": {
+                    "kind": "python.inline",
+                    "dispatch_mode": "inline",
+                    "requirements": {"capabilities": ["python"]},
+                    "policy": {"classification": "trusted", "mode": "batch"},
+                    "payload": {"code": proof_code},
+                    "metadata": {"workload_class": "connectivity_test"},
+                },
+                "shards": [
+                    {
+                        "label": f"proof-{peer_id}",
+                        "target_peer_id": peer_id,
+                        "payload": {"code": proof_code},
+                    }
+                    for peer_id in target_peer_ids
+                ],
+            },
+        )
+        return {
+            "status": "ok",
+            "proof": {"filename": proof_filename, "location_hint": "system temp directory"},
+            "mesh": {
+                "peer_count": len(target_peer_ids),
+                "target_peer_ids": list(target_peer_ids),
+                "includes_local": bool(include_local),
+            },
             "mission": mission,
         }
 

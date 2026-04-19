@@ -73,6 +73,7 @@ Related planning docs:
 - Easy setup share-link copy and plain troubleshooting guidance so nearby pairing can fall back to “copy this link to the other computer” instead of terminal instructions
 - QR pairing on the easy page plus an auto-open launcher script so first-run setup can start with `python3 scripts/start_ocp_easy.py` and a scannable pairing link
 - One-button `Connect Everything` mesh join flow so the runtime can scan, connect, and fold nearby trusted devices into one reachable mesh without per-peer clicking
+- Whole-mesh proof launch so one button can fan a cooperative test mission across the current sovereign mesh and verify multi-device execution as one fabric
 - Base-url normalization for wildcard-bound nodes so `--host 0.0.0.0` advertises a reachable endpoint instead of leaking wildcard addresses into peer state
 - Cooperative task groups that fan one logical task into multiple child jobs across local and remote peers
 - Aggregated cooperative-task state with child-job summaries so multiple machines can act on one larger job together
@@ -187,10 +188,12 @@ Related planning docs:
 - Local discovery scan: `POST /mesh/discovery/scan-local`
 - Connectivity diagnostics: `GET /mesh/connectivity/diagnostics`
 - One-click peer connect: `POST /mesh/peers/connect`
+- One-click peer connect-all: `POST /mesh/peers/connect-all`
 - Mission list: `GET /mesh/missions`
 - Mission inspect: `GET /mesh/missions/{mission_id}`
 - Mission launch: `POST /mesh/missions/launch`
 - Mission test launch: `POST /mesh/missions/test-launch`
+- Whole-mesh test launch: `POST /mesh/missions/test-mesh-launch`
 - Mission cancel: `POST /mesh/missions/{mission_id}/cancel`
 - Mission resume latest: `POST /mesh/missions/{mission_id}/resume`
 - Mission resume checkpoint: `POST /mesh/missions/{mission_id}/resume-from-checkpoint`

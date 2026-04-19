@@ -100,6 +100,7 @@ ProbeHandler._handle_mesh_missions = server.OCPHandler._handle_mesh_missions
 ProbeHandler._handle_mesh_mission_get = server.OCPHandler._handle_mesh_mission_get
 ProbeHandler._handle_mesh_mission_launch = server.OCPHandler._handle_mesh_mission_launch
 ProbeHandler._handle_mesh_mission_test_launch = server.OCPHandler._handle_mesh_mission_test_launch
+ProbeHandler._handle_mesh_mission_test_mesh_launch = server.OCPHandler._handle_mesh_mission_test_mesh_launch
 ProbeHandler._handle_mesh_mission_cancel = server.OCPHandler._handle_mesh_mission_cancel
 ProbeHandler._handle_mesh_mission_resume = server.OCPHandler._handle_mesh_mission_resume
 ProbeHandler._handle_mesh_mission_resume_from_checkpoint = server.OCPHandler._handle_mesh_mission_resume_from_checkpoint
@@ -393,6 +394,15 @@ def make_mesh_http_server(mesh):
                             limit=int(payload.get("limit") or 24),
                             port=int(payload.get("port") or 0),
                             refresh_manifest=bool(payload.get("refresh_manifest", True)),
+                        )
+                    )
+                    return
+                if path == "/mesh/missions/test-mesh-launch":
+                    self._send_json(
+                        mesh.launch_mesh_test_mission(
+                            include_local=bool(payload.get("include_local", True)),
+                            limit=int(payload.get("limit") or 24),
+                            request_id=(payload.get("request_id") or "").strip() or None,
                         )
                     )
                     return
@@ -4225,6 +4235,7 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("Connect Devices", probe.payload)
         self.assertIn("Scan Nearby", probe.payload)
         self.assertIn("Connect Everything", probe.payload)
+        self.assertIn("Test Whole Mesh", probe.payload)
         self.assertIn("Send Test Mission", probe.payload)
         self.assertIn("Live Mission Stream", probe.payload)
         self.assertIn("Operator Inspect", probe.payload)
@@ -4259,6 +4270,7 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("Nearby Computers", probe.payload)
         self.assertIn("Scan Nearby", probe.payload)
         self.assertIn("Connect Everything", probe.payload)
+        self.assertIn("Test Whole Mesh", probe.payload)
         self.assertIn("Send Test Mission", probe.payload)
         self.assertIn("Copy My Easy Link", probe.payload)
         self.assertIn("Share This Easy Link", probe.payload)
@@ -4362,6 +4374,15 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(probe.payload["mission"]["summary"]["cooperative_task_count"], 1)
         self.assertEqual(probe.payload["mission"]["summary"]["job_count"], 1)
 
+        probe = ProbeHandler()
+        probe._handle_mesh_mission_test_mesh_launch({"include_local": True, "limit": 12})
+        self.assertEqual(probe.code, 200)
+        self.assertEqual(probe.payload["status"], "ok")
+        self.assertIn("mesh", probe.payload)
+        self.assertGreaterEqual(probe.payload["mesh"]["peer_count"], 2)
+        self.assertEqual(probe.payload["mission"]["summary"]["cooperative_task_count"], 1)
+        self.assertEqual(probe.payload["mission"]["summary"]["job_count"], 2)
+
     def test_device_profile_endpoint_is_exposed_over_http(self):
         alpha = self.make_stack("alpha")
         alpha_client, _ = self.serve_mesh(alpha)
@@ -4424,6 +4445,12 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(launched["peer_id"], "beta-node")
         self.assertEqual(launched["mission"]["summary"]["cooperative_task_count"], 1)
         self.assertEqual(launched["mission"]["summary"]["job_count"], 1)
+
+        whole_mesh = alpha_client.launch_mesh_test_mission({"include_local": True, "limit": 12})
+        self.assertEqual(whole_mesh["status"], "ok")
+        self.assertGreaterEqual(whole_mesh["mesh"]["peer_count"], 2)
+        self.assertEqual(whole_mesh["mission"]["summary"]["cooperative_task_count"], 1)
+        self.assertEqual(whole_mesh["mission"]["summary"]["job_count"], 2)
 
     def test_connect_peer_uses_reachable_base_url_when_remote_manifest_advertises_wildcard(self):
         alpha = self.make_stack("alpha")
@@ -4527,6 +4554,7 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("Connect Devices", markup)
         self.assertIn("Scan Nearby", markup)
         self.assertIn("Connect Everything", markup)
+        self.assertIn("Test Whole Mesh", markup)
         self.assertIn("Send Test Mission", markup)
         self.assertIn("Live Mission Stream", markup)
         self.assertIn("Operator Inspect", markup)
@@ -4562,6 +4590,7 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("Nearby Computers", markup)
         self.assertIn("Scan Nearby", markup)
         self.assertIn("Connect Everything", markup)
+        self.assertIn("Test Whole Mesh", markup)
         self.assertIn("Send Test Mission", markup)
         self.assertIn("Copy My Easy Link", markup)
         self.assertIn("Share This Easy Link", markup)

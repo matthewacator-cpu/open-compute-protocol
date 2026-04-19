@@ -2386,6 +2386,7 @@ def build_control_page(mesh: SovereignMesh) -> str:
             <div class="ocp-connect-actions">
               <button class="ocp-button ocp-button--secondary" type="button" data-action="scan-local-peers">Scan Nearby</button>
               <button class="ocp-button ocp-button--cyan" type="button" data-action="connect-all-peers">Connect Everything</button>
+              <button class="ocp-button ocp-button--amber" type="button" data-action="test-whole-mesh">Test Whole Mesh</button>
             </div>
           </div>
           <div class="ocp-connect-manual">
@@ -2603,6 +2604,7 @@ def build_control_page(mesh: SovereignMesh) -> str:
       { label: "/mesh/approvals", href: "/mesh/approvals" },
       { label: "/mesh/peers/connect", href: "/mesh/peers/connect" },
       { label: "/mesh/peers/connect-all", href: "/mesh/peers/connect-all" },
+      { label: "/mesh/missions/test-mesh-launch", href: "/mesh/missions/test-mesh-launch" },
       { label: "/mesh/missions", href: "/mesh/missions" },
       { label: "/mesh/missions/test-launch", href: "/mesh/missions/test-launch" },
       { label: "/mesh/cooperative-tasks", href: "/mesh/cooperative-tasks" },
@@ -4831,6 +4833,15 @@ def build_control_page(mesh: SovereignMesh) -> str:
       });
     }
 
+    async function launchWholeMeshTest(options) {
+      const payload = Object.assign({ include_local: true, limit: 24 }, options || {});
+      return fetchJson("/mesh/missions/test-mesh-launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    }
+
     async function acknowledgeNotification(notificationId) {
       await fetchJson("/mesh/notifications/" + encodeURIComponent(notificationId) + "/ack", {
         method: "POST",
@@ -4973,6 +4984,27 @@ def build_control_page(mesh: SovereignMesh) -> str:
             }).catch(function (error) {
               showError("connect", "Connect everything failed: " + error.message);
               setStatus("Connect everything failed: " + error.message);
+            }).finally(function () {
+              buttonLoading(actionButton, false);
+            });
+            return;
+          }
+          if (action === "test-whole-mesh") {
+            setStatus("Launching whole mesh proof...");
+            launchWholeMeshTest().then(function (result) {
+              const mesh = result.mesh || {};
+              const mission = result.mission || {};
+              setStatus(
+                "Whole mesh proof launched across " +
+                String(mesh.peer_count || 0) +
+                " device(s): " +
+                String(mission.title || mission.id || "mission") +
+                "."
+              );
+              return fetchState({ silent: true });
+            }).catch(function (error) {
+              showError("connect", "Whole mesh proof failed: " + error.message);
+              setStatus("Whole mesh proof failed: " + error.message);
             }).finally(function () {
               buttonLoading(actionButton, false);
             });
@@ -5627,7 +5659,7 @@ def build_easy_page(mesh: SovereignMesh) -> str:
     <section class="easy-hero">
       <div class="easy-kicker">OCP Easy Setup</div>
       <h1 class="easy-title">Connect two computers without becoming the network department.</h1>
-      <p class="easy-lead">Open this page on both computers. On one computer, press <strong>Connect Everything</strong> to scan and join every reachable trusted device in one go. Then press <strong>Send Test Mission</strong> to prove real remote execution.</p>
+      <p class="easy-lead">Open this page on both computers. On one computer, press <strong>Connect Everything</strong> to scan and join every reachable trusted device in one go. Then press <strong>Test Whole Mesh</strong> to prove the mesh can execute across all connected devices as one system.</p>
       <div class="easy-steps">
         <article class="easy-step">
           <span class="easy-step__number">1</span>
@@ -5646,8 +5678,8 @@ def build_easy_page(mesh: SovereignMesh) -> str:
         <article class="easy-step">
           <span class="easy-step__number">3</span>
           <div>
-            <strong>Press Connect, then Send Test Mission</strong>
-            <span>That creates trust, syncs peer state, and launches a proof mission so you can see the mesh actually do work.</span>
+            <strong>Press Test Whole Mesh</strong>
+            <span>That launches one cooperative proof mission across the devices currently in your mesh so you can verify the whole fabric, not just one helper.</span>
           </div>
         </article>
       </div>
@@ -5663,6 +5695,7 @@ def build_easy_page(mesh: SovereignMesh) -> str:
           <div class="easy-toolbar">
             <button class="easy-button easy-button--primary" id="scan-button" type="button">Scan Nearby</button>
             <button class="easy-button easy-button--gold" id="connect-all-button" type="button">Connect Everything</button>
+            <button class="easy-button easy-button--soft" id="test-whole-mesh-button" type="button">Test Whole Mesh</button>
             <a class="easy-link easy-button--soft" href="/control">Open Advanced Deck</a>
           </div>
         </div>
@@ -6050,6 +6083,24 @@ def build_easy_page(mesh: SovereignMesh) -> str:
       await refreshEasy({ silent: true });
     }
 
+    async function sendWholeMeshTest(payload) {
+      const result = await fetchJson("/mesh/missions/test-mesh-launch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.assign({ include_local: true, limit: 24 }, payload || {}))
+      });
+      const mission = result.mission || {};
+      const mesh = result.mesh || {};
+      setStatus(
+        "Whole mesh proof launched across " +
+        String(mesh.peer_count || 0) +
+        " device(s): " +
+        String(mission.title || mission.id || "mission") +
+        "."
+      );
+      await refreshEasy({ silent: true });
+    }
+
     function manualUrl() {
       return normalizedUrl((document.getElementById("manual-url") || {}).value || "");
     }
@@ -6063,6 +6114,11 @@ def build_easy_page(mesh: SovereignMesh) -> str:
       document.getElementById("connect-all-button").addEventListener("click", function () {
         connectEverything().catch(function (error) {
           setStatus("Connect everything failed: " + error.message);
+        });
+      });
+      document.getElementById("test-whole-mesh-button").addEventListener("click", function () {
+        sendWholeMeshTest().catch(function (error) {
+          setStatus("Whole mesh proof failed: " + error.message);
         });
       });
       document.getElementById("copy-share-url").addEventListener("click", function () {
@@ -6323,6 +6379,15 @@ class OCPHandler(BaseHTTPRequestHandler):
                 limit=int(data.get("limit") or 24),
                 port=int(data.get("port") or 0),
                 refresh_manifest=bool(data.get("refresh_manifest", True)),
+            )
+        )
+
+    def _handle_mesh_mission_test_mesh_launch(self, data):
+        self._send_json(
+            self._mesh().launch_mesh_test_mission(
+                include_local=bool(data.get("include_local", True)),
+                limit=int(data.get("limit") or 24),
+                request_id=(data.get("request_id") or "").strip() or None,
             )
         )
 
@@ -7024,6 +7089,8 @@ class OCPHandler(BaseHTTPRequestHandler):
                 return self._handle_mesh_mission_launch(data)
             if path == "/mesh/missions/test-launch":
                 return self._handle_mesh_mission_test_launch(data)
+            if path == "/mesh/missions/test-mesh-launch":
+                return self._handle_mesh_mission_test_mesh_launch(data)
             if path.startswith("/mesh/missions/") and path.endswith("/cancel"):
                 return self._handle_mesh_mission_cancel(path, data)
             if path.startswith("/mesh/missions/") and path.endswith("/resume-from-checkpoint"):

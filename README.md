@@ -191,12 +191,13 @@ For a fuller walkthrough, see [docs/QUICKSTART.md](./docs/QUICKSTART.md).
 
 OCP ships a built-in easy setup surface at `GET /` and an advanced control surface at `GET /control`.
 
-The easy page is meant for the common human flow: open OCP on two or more machines, press `Connect Everything`, then press `Send Test Mission`.
+The easy page is meant for the common human flow: open OCP on two or more machines, press `Connect Everything`, then press `Test Whole Mesh`.
 It now also supports:
 
 - `Copy My Easy Link` for manual fallback
 - QR pairing so the second device can open the pairing link by scanning instead of typing
 - one-button nearby mesh join with `Connect Everything`
+- one-button cooperative verification across the whole current mesh with `Test Whole Mesh`
 - an auto-open starter script at `python3 scripts/start_ocp_easy.py`
 
 The advanced deck is phone-friendly, so your phone can act as a real operator console for the mesh. From there you can inspect and act on:
