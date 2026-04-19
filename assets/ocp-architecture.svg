@@ -20,25 +20,30 @@
 
     <rect x="120" y="230" width="1360" height="108" rx="24" fill="#0F1A27" stroke="#6AF3DE" stroke-opacity="0.34"/>
     <text x="164" y="276" font-size="20" letter-spacing="3" fill="#79EBDD">OPERATOR SURFACES</text>
-    <text x="164" y="318" font-size="34" font-weight="700" fill="#F3F8FF">/control cockpit, phone UI, approvals, notifications, mission cards</text>
+    <text x="164" y="316" font-size="32" font-weight="700" fill="#F3F8FF">/control cockpit, phone UI, approvals, notifications,</text>
+    <text x="164" y="352" font-size="32" font-weight="700" fill="#F3F8FF">mission cards, and live operator state</text>
 
     <rect x="120" y="386" width="1360" height="128" rx="24" fill="#121B29" stroke="#8AB5FF" stroke-opacity="0.34"/>
     <text x="164" y="432" font-size="20" letter-spacing="3" fill="#95B7FF">MISSION + POLICY LAYER</text>
-    <text x="164" y="474" font-size="34" font-weight="700" fill="#F3F8FF">missions, autonomy posture, helper memory, pressure, trust-gated offload</text>
+    <text x="164" y="472" font-size="31" font-weight="700" fill="#F3F8FF">missions, autonomy posture, helper memory, pressure,</text>
+    <text x="164" y="508" font-size="31" font-weight="700" fill="#F3F8FF">trust-gated offload, and governed helper choice</text>
 
     <rect x="120" y="562" width="650" height="154" rx="24" fill="#131C29" stroke="#F99D73" stroke-opacity="0.34"/>
     <text x="164" y="608" font-size="20" letter-spacing="3" fill="#FFB38F">EXECUTION PLANE</text>
-    <text x="164" y="650" font-size="32" font-weight="700" fill="#F3F8FF">jobs, queues, workers, retries, checkpoints, resume, restart</text>
-    <text x="164" y="692" font-size="22" fill="#BED0E2">shell.command / python.inline / docker.container / wasm.component</text>
+    <text x="164" y="648" font-size="30" font-weight="700" fill="#F3F8FF">jobs, queues, workers, retries, checkpoints,</text>
+    <text x="164" y="684" font-size="30" font-weight="700" fill="#F3F8FF">resume, restart, and recovery control</text>
+    <text x="164" y="722" font-size="20" fill="#BED0E2">shell.command / python.inline / docker.container / wasm.component</text>
 
     <rect x="830" y="562" width="650" height="154" rx="24" fill="#131C29" stroke="#6AF3DE" stroke-opacity="0.34"/>
     <text x="874" y="608" font-size="20" letter-spacing="3" fill="#79EBDD">COOPERATIVE + DEVICE PLANE</text>
-    <text x="874" y="650" font-size="32" font-weight="700" fill="#F3F8FF">cooperative tasks, helpers, device profiles, GPU-aware placement</text>
-    <text x="874" y="692" font-size="22" fill="#BED0E2">full / light / micro / relay + CPU / memory / disk / GPU hints</text>
+    <text x="874" y="648" font-size="30" font-weight="700" fill="#F3F8FF">cooperative tasks, helpers, device profiles,</text>
+    <text x="874" y="684" font-size="30" font-weight="700" fill="#F3F8FF">GPU-aware placement, and offload planning</text>
+    <text x="874" y="722" font-size="20" fill="#BED0E2">full / light / micro / relay + CPU / memory / disk / GPU hints</text>
 
     <rect x="120" y="764" width="1360" height="112" rx="24" fill="#101723" stroke="#8AB5FF" stroke-opacity="0.24"/>
     <text x="164" y="810" font-size="20" letter-spacing="3" fill="#95B7FF">ARTIFACT + CONTINUITY PLANE</text>
-    <text x="164" y="852" font-size="32" font-weight="700" fill="#F3F8FF">bundles, attestations, logs, replication, graph sync, mirror verification, pinning</text>
+    <text x="164" y="850" font-size="29" font-weight="700" fill="#F3F8FF">bundles, attestations, logs, replication, graph sync,</text>
+    <text x="164" y="884" font-size="29" font-weight="700" fill="#F3F8FF">mirror verification, pinning, and continuity artifacts</text>
 
     <path d="M800 338V386" stroke="url(#edge)" stroke-width="4" stroke-linecap="round"/>
     <path d="M800 514V562" stroke="url(#edge)" stroke-width="4" stroke-linecap="round"/>

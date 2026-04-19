@@ -1654,6 +1654,191 @@ def build_control_page(mesh: SovereignMesh) -> str:
     .ocp-developer summary::-webkit-details-marker {
       display: none;
     }
+    .ocp-inspect-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      display: grid;
+      align-items: stretch;
+      justify-items: end;
+      padding: 0;
+      background: rgba(2, 5, 12, 0.72);
+      backdrop-filter: blur(20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--ocp-transition);
+    }
+    .ocp-inspect-overlay.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .ocp-inspect-backdrop {
+      position: absolute;
+      inset: 0;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+    .ocp-inspect-panel {
+      position: relative;
+      z-index: 1;
+      width: min(680px, 100vw);
+      height: 100vh;
+      overflow-y: auto;
+      padding: 22px 18px 32px;
+      background:
+        radial-gradient(circle at top right, rgba(0, 212, 255, 0.12), transparent 28%),
+        linear-gradient(180deg, rgba(12, 18, 33, 0.98), rgba(6, 10, 19, 0.98));
+      border-left: 0.5px solid rgba(255, 255, 255, 0.08);
+      box-shadow: -24px 0 64px rgba(0, 0, 0, 0.34);
+      transform: translateX(24px);
+      transition: transform var(--ocp-transition);
+    }
+    .ocp-inspect-overlay.is-open .ocp-inspect-panel {
+      transform: translateX(0);
+    }
+    .ocp-inspect-panel__head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .ocp-inspect-panel__title {
+      margin: 8px 0 0;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+    .ocp-inspect-panel__subtitle {
+      margin: 8px 0 0;
+      color: var(--ocp-text-secondary);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .ocp-inspect-panel__body {
+      display: grid;
+      gap: 14px;
+      position: relative;
+      z-index: 1;
+    }
+    .ocp-inspect-close {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 14px;
+      border: 1px solid var(--ocp-line);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--ocp-text-secondary);
+    }
+    .ocp-inspect-section {
+      padding: 16px;
+      border-radius: 18px;
+      border: 0.5px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .ocp-inspect-section__title {
+      margin: 0 0 12px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .ocp-inspect-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .ocp-inspect-stat {
+      padding: 12px;
+      border-radius: 14px;
+      border: 0.5px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .ocp-inspect-stat__label {
+      display: block;
+      color: var(--ocp-text-dim);
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .ocp-inspect-stat__value {
+      display: block;
+      color: var(--ocp-text);
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .ocp-inspect-copy {
+      color: var(--ocp-text-secondary);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .ocp-inspect-list {
+      display: grid;
+      gap: 10px;
+    }
+    .ocp-inspect-item {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 0.5px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .ocp-inspect-item__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .ocp-inspect-item__title {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--ocp-text);
+    }
+    .ocp-inspect-item__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--ocp-text-secondary);
+      font-size: 12px;
+    }
+    .ocp-json-preview {
+      margin: 0;
+      padding: 14px;
+      border-radius: 16px;
+      border: 0.5px solid rgba(255, 255, 255, 0.06);
+      background: rgba(4, 7, 14, 0.84);
+      color: #bfe8ff;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      line-height: 1.65;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .ocp-button--inspect {
+      min-height: 38px;
+      padding: 0 12px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ocp-text-secondary);
+    }
+    .ocp-panorama-feed__row.ocp-panorama-feed__row--button {
+      width: 100%;
+      border: 0;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    .ocp-inspect-overlay .ocp-empty {
+      background: rgba(255, 255, 255, 0.025);
+    }
     .ocp-surface-links {
       display: flex;
       flex-wrap: wrap;
@@ -1753,6 +1938,10 @@ def build_control_page(mesh: SovereignMesh) -> str:
       }
       .ocp-panorama__summary-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .ocp-inspect-panel {
+        padding-left: 22px;
+        padding-right: 22px;
       }
       .ocp-metric-strip {
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2027,6 +2216,23 @@ def build_control_page(mesh: SovereignMesh) -> str:
     </section>
   </div>
 
+  <div class="ocp-inspect-overlay" id="inspect-overlay" aria-hidden="true">
+    <button class="ocp-inspect-backdrop" id="inspect-backdrop" type="button" aria-label="Close operator inspect"></button>
+    <aside class="ocp-inspect-panel" role="dialog" aria-modal="true" aria-labelledby="inspect-title">
+      <div class="ocp-inspect-panel__head">
+        <div>
+          <span class="ocp-version">Operator Inspect</span>
+          <h2 class="ocp-inspect-panel__title" id="inspect-title">Select a live surface</h2>
+          <p class="ocp-inspect-panel__subtitle" id="inspect-subtitle">Mission, job, and cooperative-task drill-down stays inside the cockpit now.</p>
+        </div>
+        <button class="ocp-inspect-close" id="inspect-close" type="button">Close</button>
+      </div>
+      <div class="ocp-inspect-panel__body" id="inspect-body">
+        <div class="ocp-empty">Choose a mission, queue job, or cooperative task to inspect its state, continuity, lineage, and raw JSON without leaving the deck.</div>
+      </div>
+    </aside>
+  </div>
+
   <script>
     const OCP_CONTROL_BOOTSTRAP = __OCP_CONTROL_BOOTSTRAP__;
     const JSON_SURFACES = [
@@ -2050,6 +2256,12 @@ def build_control_page(mesh: SovereignMesh) -> str:
       meshScene: null,
       refreshTimer: null,
       activityMemory: {},
+      inspect: {
+        surface: "",
+        id: "",
+        href: "",
+        title: ""
+      },
       stream: {
         source: null,
         cursor: Number((((OCP_CONTROL_BOOTSTRAP || {}).control_stream || {}).cursor) || 0),
@@ -2157,6 +2369,14 @@ def build_control_page(mesh: SovereignMesh) -> str:
     function capitalize(value) {
       const text = String(value || "").replace(/[_-]+/g, " ");
       return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+    }
+
+    function compactText(value, limit) {
+      const text = String(value || "");
+      if (text.length <= limit) {
+        return text;
+      }
+      return text.slice(0, Math.max(8, limit - 3)) + "...";
     }
 
     function animateCount(node, nextValue) {
@@ -2563,6 +2783,8 @@ def build_control_page(mesh: SovereignMesh) -> str:
             mission.target_strategy ? String(mission.target_strategy).replace(/_/g, " ") : ""
           ].filter(Boolean),
           href: "/mesh/missions/" + encodeURIComponent(mission.id || ""),
+          inspect_surface: "mission",
+          inspect_id: String(mission.id || ""),
           updated_at: recordTimestamp(mission),
           time_ms: recordTimeMs(mission),
           signature: JSON.stringify([
@@ -2599,6 +2821,8 @@ def build_control_page(mesh: SovereignMesh) -> str:
             mission ? "mission " + (mission.title || mission.id || "") : ""
           ].filter(Boolean),
           href: "/mesh/jobs/" + encodeURIComponent(job.id || message.job_id || ""),
+          inspect_surface: "job",
+          inspect_id: String(job.id || message.job_id || ""),
           updated_at: recordTimestamp(job) || recordTimestamp(message),
           time_ms: Math.max(recordTimeMs(job), recordTimeMs(message)),
           signature: JSON.stringify([
@@ -2633,6 +2857,8 @@ def build_control_page(mesh: SovereignMesh) -> str:
             "helper " + truncateId(helperName, 18)
           ],
           href: "/mesh/cooperative-tasks/" + encodeURIComponent(task.id || ""),
+          inspect_surface: "cooperative-task",
+          inspect_id: String(task.id || ""),
           updated_at: recordTimestamp(task),
           time_ms: recordTimeMs(task),
           signature: JSON.stringify([task.state, counts.completed, shards, task.updated_at])
@@ -2898,7 +3124,12 @@ def build_control_page(mesh: SovereignMesh) -> str:
             const previousSignature = app.activityMemory[item.key];
             const fresh = previousSignature && previousSignature !== item.signature;
             nextMemory[item.key] = item.signature;
-            return '<a class="ocp-panorama-feed__row ' + toneClass(item.level) + (fresh ? ' is-fresh' : '') + '" href="' + escapeHtml(item.href || "/control") + '">' +
+            const tagName = item.inspect_surface ? "button" : "a";
+            const hrefAttr = item.inspect_surface ? "" : ' href="' + escapeHtml(item.href || "/control") + '"';
+            const inspectAttrs = item.inspect_surface
+              ? ' type="button" data-inspect-surface="' + escapeHtml(item.inspect_surface) + '" data-inspect-id="' + escapeHtml(item.inspect_id || "") + '" data-inspect-title="' + escapeHtml(item.title || item.surface || "Inspect") + '" data-inspect-href="' + escapeHtml(item.href || "") + '"'
+              : "";
+            return '<' + tagName + ' class="ocp-panorama-feed__row ocp-panorama-feed__row--button ' + toneClass(item.level) + (fresh ? ' is-fresh' : '') + '"' + hrefAttr + inspectAttrs + '>' +
               '<span class="ocp-panorama-feed__strip"></span>' +
               '<div class="ocp-panorama-feed__body">' +
                 '<div class="ocp-panorama-feed__head">' +
@@ -2913,10 +3144,311 @@ def build_control_page(mesh: SovereignMesh) -> str:
                   return '<span>' + escapeHtml(metaItem) + '</span>';
                 }).join("") + '</div>' +
               '</div>' +
-            '</a>';
+            '</' + tagName + '>';
           }).join("")
         : '<div class="ocp-empty">No live mesh activity yet. Missions, jobs, notifications, and helpers will light this stream up as soon as they move.</div>';
       app.activityMemory = nextMemory;
+    }
+
+    function inspectEndpoint(surface, identifier) {
+      if (surface === "mission") {
+        return "/mesh/missions/" + encodeURIComponent(identifier);
+      }
+      if (surface === "job") {
+        return "/mesh/jobs/" + encodeURIComponent(identifier);
+      }
+      if (surface === "cooperative-task") {
+        return "/mesh/cooperative-tasks/" + encodeURIComponent(identifier);
+      }
+      return "";
+    }
+
+    function inspectLabel(surface) {
+      if (surface === "mission") {
+        return "Mission";
+      }
+      if (surface === "job") {
+        return "Queue Job";
+      }
+      if (surface === "cooperative-task") {
+        return "Cooperative Task";
+      }
+      return "Surface";
+    }
+
+    function inspectStatusTone(status) {
+      const token = String(status || "").toLowerCase();
+      if (["completed", "approved", "connected"].includes(token)) {
+        return "ocp-pill--eligible";
+      }
+      if (["failed", "cancelled", "rejected", "offline", "disconnected", "attention"].includes(token)) {
+        return "ocp-pill--blocked";
+      }
+      if (["checkpointed", "waiting", "pending", "queued", "retry_wait", "degraded"].includes(token)) {
+        return "ocp-pill--warn";
+      }
+      return "ocp-pill--role";
+    }
+
+    function renderInspectStats(items) {
+      return '<div class="ocp-inspect-grid">' + items.filter(function (item) {
+        return item && item.value !== undefined && item.value !== null && String(item.value) !== "";
+      }).map(function (item) {
+        return '<div class="ocp-inspect-stat">' +
+          '<span class="ocp-inspect-stat__label">' + escapeHtml(item.label) + '</span>' +
+          '<span class="ocp-inspect-stat__value">' + escapeHtml(item.value) + '</span>' +
+        '</div>';
+      }).join("") + '</div>';
+    }
+
+    function renderInspectList(title, items) {
+      const rows = (items || []).filter(Boolean);
+      if (!rows.length) {
+        return "";
+      }
+      return '<section class="ocp-inspect-section">' +
+        '<h3 class="ocp-inspect-section__title">' + escapeHtml(title) + '</h3>' +
+        '<div class="ocp-inspect-list">' + rows.join("") + '</div>' +
+      '</section>';
+    }
+
+    function renderInspectActionButton(label, surface, identifier, href) {
+      if (!surface || !identifier) {
+        return "";
+      }
+      return '<button class="ocp-button ocp-button--inspect" type="button" data-inspect-surface="' + escapeHtml(surface) + '" data-inspect-id="' + escapeHtml(identifier) + '" data-inspect-title="' + escapeHtml(label) + '" data-inspect-href="' + escapeHtml(href || inspectEndpoint(surface, identifier)) + '">' + escapeHtml(label) + '</button>';
+    }
+
+    function renderArtifactLink(label, artifactRef) {
+      if (!artifactRef || !artifactRef.id) {
+        return "";
+      }
+      return '<a class="ocp-link-button ocp-mono-link" href="/mesh/artifacts/' + escapeHtml(artifactRef.id) + '" target="_blank" rel="noreferrer">' + escapeHtml(label) + '</a>';
+    }
+
+    function renderMissionInspect(payload) {
+      const summary = payload.summary || {};
+      const continuity = payload.continuity || {};
+      const lineage = payload.lineage || {};
+      const childJobs = payload.child_jobs || [];
+      const jobs = lineage.jobs || [];
+      const tasks = lineage.cooperative_tasks || [];
+      return [
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Mission Summary</h3>' +
+          '<div class="ocp-inspect-copy">' + escapeHtml(payload.intent || "Mission intent not provided.") + '</div>' +
+          '<div class="ocp-toolbar" style="margin-top:12px;">' +
+            '<span class="ocp-pill ' + inspectStatusTone(payload.status) + '">' + escapeHtml(String(payload.status || "planned").toUpperCase()) + '</span>' +
+            renderArtifactLink("Checkpoint Artifact", payload.latest_checkpoint_ref) +
+            renderArtifactLink("Result Bundle", payload.result_bundle_ref) +
+            '<a class="ocp-link-button ocp-mono-link" href="/mesh/missions/' + escapeHtml(payload.id || "") + '" target="_blank" rel="noreferrer">Open JSON</a>' +
+          '</div>' +
+        '</section>',
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Continuity + Policy</h3>' +
+          renderInspectStats([
+            { label: "Priority", value: payload.priority || "normal" },
+            { label: "Workload", value: payload.workload_class || "default" },
+            { label: "Target Strategy", value: String(payload.target_strategy || "local").replace(/_/g, " ") },
+            { label: "Origin Peer", value: payload.origin_peer_id || app.state.node_id || "" },
+            { label: "Resumable", value: continuity.resumable ? "yes" : "no" },
+            { label: "Checkpoint Ready", value: continuity.checkpoint_ready ? "yes" : "no" }
+          ]) +
+        '</section>',
+        renderInspectList("Child Jobs", childJobs.map(function (job) {
+          return '<div class="ocp-inspect-item">' +
+            '<div class="ocp-inspect-item__head">' +
+              '<span class="ocp-inspect-item__title">' + escapeHtml(job.kind || compactText(job.id || "job", 20)) + '</span>' +
+              '<span class="ocp-pill ' + inspectStatusTone(job.status) + '">' + escapeHtml(String(job.status || "queued").toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="ocp-inspect-item__meta">' +
+              '<span>' + escapeHtml(compactText(job.id || "", 30)) + '</span>' +
+              '<span>' + escapeHtml(job.target || "local") + '</span>' +
+              '<span>' + escapeHtml(relativeTime(job.updated_at || job.created_at)) + '</span>' +
+            '</div>' +
+            '<div class="ocp-toolbar">' +
+              renderInspectActionButton("Inspect Job", "job", job.id || "", "/mesh/jobs/" + encodeURIComponent(job.id || "")) +
+            '</div>' +
+          '</div>';
+        })) || "",
+        renderInspectList("Cooperative Tasks", tasks.map(function (task) {
+          return '<div class="ocp-inspect-item">' +
+            '<div class="ocp-inspect-item__head">' +
+              '<span class="ocp-inspect-item__title">' + escapeHtml(task.name || compactText(task.id || "task", 22)) + '</span>' +
+              '<span class="ocp-pill ' + inspectStatusTone(task.state || task.status) + '">' + escapeHtml(String(task.state || task.status || "active").toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="ocp-inspect-item__meta">' +
+              '<span>' + escapeHtml(compactText(task.id || "", 30)) + '</span>' +
+              '<span>' + escapeHtml(String(task.shard_count || 0) + " shards") + '</span>' +
+            '</div>' +
+            '<div class="ocp-toolbar">' +
+              renderInspectActionButton("Inspect Task", "cooperative-task", task.id || "", "/mesh/cooperative-tasks/" + encodeURIComponent(task.id || "")) +
+            '</div>' +
+          '</div>';
+        })),
+        renderInspectList("Mission Lineage", [
+          jobs.length ? '<div class="ocp-inspect-item"><div class="ocp-inspect-item__head"><span class="ocp-inspect-item__title">Job Lineage</span></div><div class="ocp-inspect-item__meta">' + jobs.map(function (job) { return '<span>' + escapeHtml(compactText(job.id || "", 26)) + '</span>'; }).join("") + '</div></div>' : "",
+          payload.latest_checkpoint_ref && payload.latest_checkpoint_ref.id ? '<div class="ocp-inspect-item"><div class="ocp-inspect-item__head"><span class="ocp-inspect-item__title">Checkpoint</span></div><div class="ocp-toolbar">' + renderArtifactLink("Open Artifact", payload.latest_checkpoint_ref) + '</div></div>' : "",
+          payload.result_bundle_ref && payload.result_bundle_ref.id ? '<div class="ocp-inspect-item"><div class="ocp-inspect-item__head"><span class="ocp-inspect-item__title">Result Bundle</span></div><div class="ocp-toolbar">' + renderArtifactLink("Open Result Bundle", payload.result_bundle_ref) + '</div></div>' : ""
+        ]),
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Raw JSON</h3>' +
+          '<pre class="ocp-json-preview">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</pre>' +
+        '</section>'
+      ].join("");
+    }
+
+    function renderJobInspect(payload) {
+      const recovery = payload.recovery || {};
+      const queue = payload.queue || {};
+      const attempts = payload.attempts || [];
+      const mission = payload.mission || {};
+      return [
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Queue Job</h3>' +
+          '<div class="ocp-toolbar">' +
+            '<span class="ocp-pill ' + inspectStatusTone(payload.status) + '">' + escapeHtml(String(payload.status || "queued").toUpperCase()) + '</span>' +
+            (queue.status ? '<span class="ocp-pill ' + inspectStatusTone(queue.status) + '">' + escapeHtml(String(queue.status).toUpperCase()) + '</span>' : '') +
+            (mission.mission_id ? renderInspectActionButton("Mission Context", "mission", mission.mission_id, "/mesh/missions/" + encodeURIComponent(mission.mission_id)) : '') +
+            '<a class="ocp-link-button ocp-mono-link" href="/mesh/jobs/' + escapeHtml(payload.id || "") + '" target="_blank" rel="noreferrer">Open JSON</a>' +
+          '</div>' +
+        '</section>',
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Execution + Recovery</h3>' +
+          renderInspectStats([
+            { label: "Kind", value: payload.kind || "job" },
+            { label: "Origin", value: payload.origin || "" },
+            { label: "Target", value: payload.target || "local" },
+            { label: "Recovery State", value: recovery.state || payload.status || "" },
+            { label: "Resumable", value: recovery.resumable ? "yes" : "no" },
+            { label: "Queue Deliveries", value: String(queue.delivery_attempts || 0) }
+          ]) +
+          '<div class="ocp-inspect-copy" style="margin-top:12px;">' + escapeHtml(recovery.recovery_hint || queue.last_error || "Queue-backed execution state is available for operator inspection.") + '</div>' +
+          '<div class="ocp-toolbar" style="margin-top:12px;">' +
+            renderArtifactLink("Checkpoint Artifact", payload.latest_checkpoint_ref) +
+            renderArtifactLink("Result Artifact", payload.result_ref) +
+            renderArtifactLink("Result Bundle", payload.result_bundle_ref) +
+          '</div>' +
+        '</section>',
+        renderInspectList("Attempts", attempts.map(function (attempt) {
+          return '<div class="ocp-inspect-item">' +
+            '<div class="ocp-inspect-item__head">' +
+              '<span class="ocp-inspect-item__title">' + escapeHtml(compactText(attempt.id || "attempt", 28)) + '</span>' +
+              '<span class="ocp-pill ' + inspectStatusTone(attempt.status) + '">' + escapeHtml(String(attempt.status || "unknown").toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="ocp-inspect-item__meta">' +
+              '<span>' + escapeHtml(attempt.executor || "runtime") + '</span>' +
+              '<span>' + escapeHtml(relativeTime(attempt.updated_at || attempt.started_at || attempt.created_at)) + '</span>' +
+            '</div>' +
+          '</div>';
+        })),
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Raw JSON</h3>' +
+          '<pre class="ocp-json-preview">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</pre>' +
+        '</section>'
+      ].join("");
+    }
+
+    function renderCooperativeInspect(payload) {
+      const summary = payload.summary || {};
+      const counts = summary.counts || {};
+      const children = payload.children || [];
+      return [
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Cooperative Task</h3>' +
+          '<div class="ocp-toolbar">' +
+            '<span class="ocp-pill ' + inspectStatusTone(payload.state || payload.status) + '">' + escapeHtml(String(payload.state || payload.status || "active").toUpperCase()) + '</span>' +
+            '<a class="ocp-link-button ocp-mono-link" href="/mesh/cooperative-tasks/' + escapeHtml(payload.id || "") + '" target="_blank" rel="noreferrer">Open JSON</a>' +
+          '</div>' +
+          '<div class="ocp-inspect-copy" style="margin-top:12px;">Distributed shard orchestration across local and remote peers.</div>' +
+        '</section>',
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Shard Progress</h3>' +
+          renderInspectStats([
+            { label: "Strategy", value: payload.strategy || "spread" },
+            { label: "Shards", value: String(payload.shard_count || 0) },
+            { label: "Completed", value: String(counts.completed || 0) },
+            { label: "Active", value: String(counts.active || 0) },
+            { label: "Pending", value: String(counts.pending || 0) },
+            { label: "Failed", value: String(counts.attention || counts.failed || 0) }
+          ]) +
+        '</section>',
+        renderInspectList("Child Placements", children.map(function (child) {
+          const job = child.job || {};
+          const placement = child.placement || {};
+          return '<div class="ocp-inspect-item">' +
+            '<div class="ocp-inspect-item__head">' +
+              '<span class="ocp-inspect-item__title">' + escapeHtml(child.label || compactText(job.id || "child", 24)) + '</span>' +
+              '<span class="ocp-pill ' + inspectStatusTone(job.status || child.state) + '">' + escapeHtml(String(job.status || child.state || "queued").toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="ocp-inspect-item__meta">' +
+              '<span>' + escapeHtml(placement.target_peer_id || job.target || "local") + '</span>' +
+              '<span>' + escapeHtml(job.kind || "job") + '</span>' +
+              '<span>' + escapeHtml(relativeTime(job.updated_at || payload.updated_at || payload.created_at)) + '</span>' +
+            '</div>' +
+            '<div class="ocp-toolbar">' +
+              (job.id ? renderInspectActionButton("Inspect Job", "job", job.id, "/mesh/jobs/" + encodeURIComponent(job.id)) : "") +
+            '</div>' +
+          '</div>';
+        })),
+        '<section class="ocp-inspect-section">' +
+          '<h3 class="ocp-inspect-section__title">Raw JSON</h3>' +
+          '<pre class="ocp-json-preview">' + escapeHtml(JSON.stringify(payload, null, 2)) + '</pre>' +
+        '</section>'
+      ].join("");
+    }
+
+    function renderInspectBody(surface, payload) {
+      if (surface === "mission") {
+        return renderMissionInspect(payload);
+      }
+      if (surface === "job") {
+        return renderJobInspect(payload);
+      }
+      if (surface === "cooperative-task") {
+        return renderCooperativeInspect(payload);
+      }
+      return '<div class="ocp-empty">No drill-down renderer is available for this surface yet.</div>';
+    }
+
+    function closeInspectOverlay() {
+      const overlay = document.getElementById("inspect-overlay");
+      if (!overlay) {
+        return;
+      }
+      overlay.classList.remove("is-open");
+      overlay.setAttribute("aria-hidden", "true");
+      app.inspect = { surface: "", id: "", href: "", title: "" };
+    }
+
+    async function openInspectOverlay(surface, identifier, title, href) {
+      const endpoint = inspectEndpoint(surface, identifier);
+      if (!endpoint) {
+        return;
+      }
+      const overlay = document.getElementById("inspect-overlay");
+      const body = document.getElementById("inspect-body");
+      document.getElementById("inspect-title").textContent = title || (inspectLabel(surface) + " Inspect");
+      document.getElementById("inspect-subtitle").textContent = inspectLabel(surface) + " drill-down stays inside the cockpit.";
+      body.innerHTML = '<div class="ocp-empty">Loading live ' + escapeHtml(inspectLabel(surface).toLowerCase()) + ' data…</div>';
+      overlay.classList.add("is-open");
+      overlay.setAttribute("aria-hidden", "false");
+      app.inspect = { surface: surface, id: identifier, href: href || endpoint, title: title || "" };
+      try {
+        const payload = await fetchJson(endpoint);
+        document.getElementById("inspect-title").textContent = title || payload.title || payload.name || payload.kind || payload.id || inspectLabel(surface);
+        document.getElementById("inspect-subtitle").textContent = "Live " + inspectLabel(surface).toLowerCase() + " view from " + endpoint + ".";
+        body.innerHTML = renderInspectBody(surface, payload);
+      } catch (error) {
+        body.innerHTML = '<div class="ocp-empty">Inspect failed: ' + escapeHtml(error.message) + '</div>';
+      }
+    }
+
+    function refreshInspectOverlay() {
+      if (!app.inspect.surface || !app.inspect.id) {
+        return;
+      }
+      openInspectOverlay(app.inspect.surface, app.inspect.id, app.inspect.title, app.inspect.href);
     }
 
     function renderOperations(state) {
@@ -2951,6 +3483,7 @@ def build_control_page(mesh: SovereignMesh) -> str:
             '</div>' +
             '<div class="ocp-autonomy-copy">' + escapeHtml(recovery.recovery_hint || message.last_error || "Queue-backed job ready for operator action.") + '</div>' +
             '<div class="ocp-toolbar">' + actions +
+              renderInspectActionButton("Inspect Job", "job", job.id || "", "/mesh/jobs/" + encodeURIComponent(job.id || "")) +
               '<a class="ocp-link-button ocp-mono-link" href="/mesh/jobs/' + escapeHtml(job.id || "") + '">Inspect JSON</a>' +
             '</div>' +
           '</div>' +
@@ -3056,6 +3589,7 @@ def build_control_page(mesh: SovereignMesh) -> str:
               '<span>' + escapeHtml(resultReady) + '</span>' +
             '</div>' +
             '<div class="ocp-toolbar">' + actionButtons.join("") +
+              renderInspectActionButton("Inspect Mission", "mission", mission.id || "", "/mesh/missions/" + encodeURIComponent(mission.id || "")) +
               lineageLinks.join("") +
               '<a class="ocp-link-button ocp-mono-link" href="/mesh/missions/' + escapeHtml(mission.id || "") + '">Inspect JSON</a>' +
             '</div>' +
@@ -3095,6 +3629,10 @@ def build_control_page(mesh: SovereignMesh) -> str:
               '<span>' + escapeHtml(done + "/" + shards + " shards") + '</span>' +
               '<span>' + escapeHtml("helper " + truncateId(helperName || "local", 18)) + '</span>' +
               '<span>' + escapeHtml(relativeTime(task.created_at || task.updated_at)) + '</span>' +
+            '</div>' +
+            '<div class="ocp-toolbar">' +
+              renderInspectActionButton("Inspect Task", "cooperative-task", task.id || "", "/mesh/cooperative-tasks/" + encodeURIComponent(task.id || "")) +
+              '<a class="ocp-link-button ocp-mono-link" href="/mesh/cooperative-tasks/' + escapeHtml(task.id || "") + '">Inspect JSON</a>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -3639,6 +4177,9 @@ def build_control_page(mesh: SovereignMesh) -> str:
       nextState.jobs = Object.fromEntries(jobPairs.filter(function (pair) { return pair[1]; }));
       app.state = nextState;
       renderAll(app.state);
+      if (app.inspect.surface && app.inspect.id) {
+        refreshInspectOverlay();
+      }
       if (!config.silent) {
         setStatus("Cockpit refreshed for " + nodeId + ".");
       }
@@ -3680,6 +4221,9 @@ def build_control_page(mesh: SovereignMesh) -> str:
       app.state = nextState;
       app.stream.cursor = Number(controlStream.cursor || 0);
       renderAll(app.state);
+      if (app.inspect.surface && app.inspect.id) {
+        refreshInspectOverlay();
+      }
       if (Array.isArray(envelope.events) && envelope.events.length) {
         const latestEvent = envelope.events[envelope.events.length - 1] || {};
         setStatus("Live stream: " + String(envelope.events.length) + " mesh event(s) applied through " + String(latestEvent.event_type || "control update") + ".");
@@ -3798,6 +4342,13 @@ def build_control_page(mesh: SovereignMesh) -> str:
         fetchState().catch(function (error) {
           setStatus("Refresh failed: " + error.message);
         });
+      });
+      document.getElementById("inspect-close").addEventListener("click", closeInspectOverlay);
+      document.getElementById("inspect-backdrop").addEventListener("click", closeInspectOverlay);
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          closeInspectOverlay();
+        }
       });
       document.addEventListener("click", function (event) {
         const actionButton = event.target.closest("button[data-action]");
@@ -3942,6 +4493,17 @@ def build_control_page(mesh: SovereignMesh) -> str:
               buttonLoading(actionButton, false);
             });
           }
+          return;
+        }
+        const inspectTarget = event.target.closest("[data-inspect-surface]");
+        if (inspectTarget) {
+          event.preventDefault();
+          openInspectOverlay(
+            inspectTarget.getAttribute("data-inspect-surface") || "",
+            inspectTarget.getAttribute("data-inspect-id") || "",
+            inspectTarget.getAttribute("data-inspect-title") || "",
+            inspectTarget.getAttribute("data-inspect-href") || ""
+          );
           return;
         }
         const copyLink = event.target.closest("[data-copy-url]");

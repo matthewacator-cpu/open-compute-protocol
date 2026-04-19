@@ -69,27 +69,36 @@
   </g>
 
   <g font-family="Avenir Next, Inter, Helvetica, Arial, sans-serif" fill="#E9F4FF">
-    <text x="132" y="182" font-size="22" letter-spacing="4" fill="#8ADDE3">SOVEREIGN MESH / OCP V0.1</text>
-    <text x="132" y="282" font-size="88" font-weight="700">The Open Compute</text>
-    <text x="132" y="370" font-size="88" font-weight="700">Protocol</text>
-    <text x="132" y="444" font-size="28" fill="#BFD0E4">A local-first compute fabric for trusted devices, helpers, missions,</text>
-    <text x="132" y="484" font-size="28" fill="#BFD0E4">artifacts, recovery, and governed offload across your own mesh.</text>
+    <text x="132" y="176" font-size="20" letter-spacing="4" fill="#8ADDE3">SOVEREIGN MESH / OCP V0.1</text>
+    <text x="132" y="276" font-size="88" font-weight="700">The Open Compute</text>
+    <text x="132" y="364" font-size="88" font-weight="700">Protocol</text>
+    <text x="132" y="434" font-size="28" fill="#BFD0E4">A local-first compute fabric for trusted devices, helpers, missions,</text>
+    <text x="132" y="474" font-size="28" fill="#BFD0E4">artifacts, recovery, and governed offload across your own mesh.</text>
 
-    <rect x="132" y="552" width="166" height="46" rx="23" fill="#103249" stroke="#6CF4DF" stroke-opacity="0.42"/>
-    <text x="170" y="583" font-size="20" font-weight="600">MISSIONS</text>
-    <rect x="314" y="552" width="160" height="46" rx="23" fill="#10273E" stroke="#75D6FF" stroke-opacity="0.42"/>
-    <text x="350" y="583" font-size="20" font-weight="600">HELPERS</text>
-    <rect x="490" y="552" width="214" height="46" rx="23" fill="#392018" stroke="#FF9C70" stroke-opacity="0.42"/>
-    <text x="530" y="583" font-size="20" font-weight="600">CONTINUITY</text>
+    <rect x="132" y="540" width="166" height="46" rx="23" fill="#103249" stroke="#6CF4DF" stroke-opacity="0.42"/>
+    <text x="167" y="570" font-size="20" font-weight="600">MISSIONS</text>
+    <rect x="314" y="540" width="160" height="46" rx="23" fill="#10273E" stroke="#75D6FF" stroke-opacity="0.42"/>
+    <text x="348" y="570" font-size="20" font-weight="600">HELPERS</text>
+    <rect x="490" y="540" width="214" height="46" rx="23" fill="#392018" stroke="#FF9C70" stroke-opacity="0.42"/>
+    <text x="527" y="570" font-size="20" font-weight="600">CONTINUITY</text>
 
-    <text x="286" y="689" font-size="18" fill="#9FC0D8">Phone control</text>
-    <text x="490" y="552" font-size="18" fill="#9FC0D8">Watch</text>
-    <text x="760" y="510" font-size="18" fill="#9FC0D8">Mission layer</text>
-    <text x="965" y="344" font-size="18" fill="#9FC0D8">GPU node</text>
-    <text x="1140" y="412" font-size="18" fill="#9FC0D8">Relay</text>
-    <text x="1266" y="650" font-size="18" fill="#9FC0D8">Artifacts</text>
-    <text x="410" y="280" font-size="18" fill="#9FC0D8">Laptop helper</text>
-    <text x="722" y="206" font-size="18" fill="#9FC0D8">Workstation</text>
-    <text x="704" y="714" font-size="18" fill="#9FC0D8">Checkpoint</text>
+    <rect x="244" y="664" width="134" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#6CF4DF" stroke-opacity="0.24"/>
+    <text x="266" y="687" font-size="16" fill="#C4D8EA">Phone control</text>
+    <rect x="380" y="248" width="132" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#75D6FF" stroke-opacity="0.24"/>
+    <text x="404" y="271" font-size="16" fill="#C4D8EA">Laptop helper</text>
+    <rect x="675" y="176" width="128" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#75D6FF" stroke-opacity="0.24"/>
+    <text x="704" y="199" font-size="16" fill="#C4D8EA">Workstation</text>
+    <rect x="714" y="486" width="138" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#FFFFFF" stroke-opacity="0.24"/>
+    <text x="741" y="509" font-size="16" fill="#C4D8EA">Mission layer</text>
+    <rect x="926" y="320" width="114" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#FF9C70" stroke-opacity="0.24"/>
+    <text x="955" y="343" font-size="16" fill="#C4D8EA">GPU node</text>
+    <rect x="1096" y="390" width="94" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#FFD66B" stroke-opacity="0.24"/>
+    <text x="1122" y="413" font-size="16" fill="#C4D8EA">Relay</text>
+    <rect x="1232" y="634" width="110" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#88A8FF" stroke-opacity="0.24"/>
+    <text x="1257" y="657" font-size="16" fill="#C4D8EA">Artifacts</text>
+    <rect x="692" y="696" width="118" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#FF9C70" stroke-opacity="0.24"/>
+    <text x="718" y="719" font-size="16" fill="#C4D8EA">Checkpoint</text>
+    <rect x="452" y="594" width="96" height="34" rx="17" fill="#0E1926" fill-opacity="0.78" stroke="#75D6FF" stroke-opacity="0.24"/>
+    <text x="482" y="617" font-size="16" fill="#C4D8EA">Watch</text>
   </g>
 </svg>

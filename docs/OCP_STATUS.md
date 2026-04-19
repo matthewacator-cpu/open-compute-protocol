@@ -6,6 +6,7 @@ Related planning docs:
 
 - `docs/OCP_MASTER_PLAN.md`
 - `docs/OCP_ALL_DEVICES_PLAN.md`
+- `docs/QUICKSTART.md`
 
 ## Current framing
 
@@ -73,6 +74,7 @@ Related planning docs:
 - Mission launch paths that wrap a single local job or a cooperative task launch without replacing existing execution primitives
 - Mission continuity tracking with child-job lineage, checkpoint/result references, UI drill-down links, mission-level resume/restart/cancel controls, and status propagation from execution state
 - Mesh Pulse control-deck panorama with live mission/queue/helper/approval/notification summaries and a cross-system activity stream for operator visibility
+- In-place operator inspect overlay for mission, queue-job, and cooperative-task drill-down without leaving the cockpit
 - Compute-profile-aware device modeling with CPU, memory, disk, accelerator, GPU class, and VRAM hints
 - Helper enlistment planning and lifecycle controls for enlist, drain, retire, and pressure-triggered auto-seek
 - GPU-aware scheduling and cooperative shard placement so GPU-heavy work can prefer the right helper peer

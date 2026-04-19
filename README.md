@@ -14,7 +14,7 @@
 [![Version](https://img.shields.io/badge/wire%20version-sovereign--mesh%2Fv1-00D4FF?style=flat-square&labelColor=06090F)](./docs/OCP_STATUS.md)
 [![Status](https://img.shields.io/badge/status-active%20development-C8A96E?style=flat-square&labelColor=06090F)](./docs/OCP_MASTER_PLAN.md)
 [![Protocol](https://img.shields.io/badge/protocol-OCP%20v0.1-7BC6FF?style=flat-square&labelColor=06090F)](./docs/OCP_STATUS.md)
-[![License](https://img.shields.io/badge/license-MIT-F4F1E8?style=flat-square&labelColor=06090F)](./LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-F4F1E8?style=flat-square&labelColor=06090F)](./LICENSE)
 
 </div>
 
@@ -134,14 +134,21 @@ Some devices are powerful. Some are private. Some are fragile. Some are approval
 ## Quick Start
 
 ```bash
-cd /Users/mespoy/Desktop/ocp
-python3 server.py --host 127.0.0.1 --port 8421
+git clone https://github.com/matthewacator-cpu/open-compute-protocol.git
+cd open-compute-protocol
+./scripts/start_ocp.sh
 ```
 
 Then open the control deck:
 
 ```text
 http://127.0.0.1:8421/control
+```
+
+If you want the direct server form instead of the helper script:
+
+```bash
+python3 server.py --host 127.0.0.1 --port 8421
 ```
 
 **Useful options:**
@@ -155,6 +162,8 @@ http://127.0.0.1:8421/control
 --device-class    full
 --form-factor     workstation
 ```
+
+For a fuller walkthrough, see [docs/QUICKSTART.md](./docs/QUICKSTART.md).
 
 ---
 
@@ -225,6 +234,7 @@ OCP is already past "protocol sketch" stage. If it keeps going in this direction
 ## Related
 
 - [Status](./docs/OCP_STATUS.md)
+- [Quickstart](./docs/QUICKSTART.md)
 - [Master Plan](./docs/OCP_MASTER_PLAN.md)
 - [All Devices Plan](./docs/OCP_ALL_DEVICES_PLAN.md)
 
