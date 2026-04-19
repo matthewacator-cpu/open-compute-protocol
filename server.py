@@ -3515,7 +3515,7 @@ def build_control_page(mesh: SovereignMesh) -> str:
 
     function inspectEndpoint(surface, identifier) {
       if (surface === "mission") {
-        return "/mesh/missions/" + encodeURIComponent(identifier);
+        return "/mesh/missions/" + encodeURIComponent(identifier) + "/continuity";
       }
       if (surface === "job") {
         return "/mesh/jobs/" + encodeURIComponent(identifier);
@@ -3590,34 +3590,75 @@ def build_control_page(mesh: SovereignMesh) -> str:
     }
 
     function renderMissionInspect(payload) {
-      const summary = payload.summary || {};
-      const continuity = payload.continuity || {};
-      const lineage = payload.lineage || {};
-      const childJobs = payload.child_jobs || [];
+      const mission = payload.mission || {};
+      const continuity = mission.continuity || {};
+      const lineage = mission.lineage || {};
+      const childJobs = mission.child_jobs || [];
       const jobs = lineage.jobs || [];
       const tasks = lineage.cooperative_tasks || [];
+      const currentDevices = payload.current_devices || [];
+      const safeDevices = payload.safe_devices || [];
+      const checkpointArtifact = ((payload.artifacts || {}).checkpoint || {}).artifact || {};
+      const resultBundle = ((payload.artifacts || {}).result_bundle || {}).artifact || {};
+      const actionButtons = (payload.available_actions || []).map(function (action) {
+        const tone = action.primary ? "ocp-button--amber" : "ocp-button--ghost";
+        const actionMap = {
+          resume: "mission-resume",
+          resume_from_checkpoint: "mission-resume-checkpoint",
+          restart: "mission-restart",
+          cancel: "mission-cancel"
+        };
+        const dataAction = actionMap[action.action || ""] || "";
+        if (!dataAction) {
+          return "";
+        }
+        return '<button class="ocp-button ' + tone + '" type="button" data-action="' + escapeHtml(dataAction) + '" data-mission-id="' + escapeHtml(payload.mission_id || mission.id || "") + '">' + escapeHtml(action.label || "Action") + '</button>';
+      }).join("");
       return [
         '<section class="ocp-inspect-section">' +
-          '<h3 class="ocp-inspect-section__title">Mission Summary</h3>' +
-          '<div class="ocp-inspect-copy">' + escapeHtml(payload.intent || "Mission intent not provided.") + '</div>' +
+          '<h3 class="ocp-inspect-section__title">Mission Continuity</h3>' +
+          '<div class="ocp-inspect-copy">' + escapeHtml(payload.headline || mission.intent || "Mission continuity state is available.") + '</div>' +
+          '<div class="ocp-inspect-copy" style="margin-top:12px;">' + escapeHtml(payload.operator_summary || mission.intent || "") + '</div>' +
           '<div class="ocp-toolbar" style="margin-top:12px;">' +
-            '<span class="ocp-pill ' + inspectStatusTone(payload.status) + '">' + escapeHtml(String(payload.status || "planned").toUpperCase()) + '</span>' +
-            renderArtifactLink("Checkpoint Artifact", payload.latest_checkpoint_ref) +
-            renderArtifactLink("Result Bundle", payload.result_bundle_ref) +
-            '<a class="ocp-link-button ocp-mono-link" href="/mesh/missions/' + escapeHtml(payload.id || "") + '" target="_blank" rel="noreferrer">Open JSON</a>' +
+            '<span class="ocp-pill ' + inspectStatusTone(payload.status || mission.status) + '">' + escapeHtml(String(payload.status || mission.status || "planned").toUpperCase()) + '</span>' +
+            renderArtifactLink("Checkpoint Artifact", checkpointArtifact) +
+            renderArtifactLink("Result Bundle", resultBundle) +
+            '<a class="ocp-link-button ocp-mono-link" href="/mesh/missions/' + escapeHtml(payload.mission_id || mission.id || "") + '" target="_blank" rel="noreferrer">Open JSON</a>' +
           '</div>' +
+          (actionButtons ? '<div class="ocp-toolbar" style="margin-top:12px;">' + actionButtons + '</div>' : '') +
         '</section>',
         '<section class="ocp-inspect-section">' +
-          '<h3 class="ocp-inspect-section__title">Continuity + Policy</h3>' +
+          '<h3 class="ocp-inspect-section__title">What Happens Next</h3>' +
           renderInspectStats([
-            { label: "Priority", value: payload.priority || "normal" },
-            { label: "Workload", value: payload.workload_class || "default" },
-            { label: "Target Strategy", value: String(payload.target_strategy || "local").replace(/_/g, " ") },
-            { label: "Origin Peer", value: payload.origin_peer_id || app.state.node_id || "" },
+            { label: "Mission", value: mission.title || payload.title || "Mission" },
+            { label: "Recommended Action", value: payload.recommended_action_label || "Keep Watching" },
+            { label: "Current State", value: String(payload.continuity_state || mission.status || "planned").replace(/_/g, " ") },
             { label: "Resumable", value: continuity.resumable ? "yes" : "no" },
-            { label: "Checkpoint Ready", value: continuity.checkpoint_ready ? "yes" : "no" }
+            { label: "Checkpoint Ready", value: continuity.checkpoint_ready ? "yes" : "no" },
+            { label: "Preferred Recovery Devices", value: (payload.preferred_target_device_classes || []).join(", ") }
           ]) +
         '</section>',
+        renderInspectList("Current Devices", currentDevices.map(function (device) {
+          return '<div class="ocp-inspect-item">' +
+            '<div class="ocp-inspect-item__head">' +
+              '<span class="ocp-inspect-item__title">' + escapeHtml(device.display_name || device.peer_id || "device") + '</span>' +
+              '<span class="ocp-pill ' + inspectStatusTone(device.connected ? "connected" : "offline") + '">' + escapeHtml(String(device.device_class || "device").toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="ocp-inspect-item__meta">' +
+              '<span>' + escapeHtml(device.trust_tier || "trusted") + '</span>' +
+              '<span>' + escapeHtml(device.stability || "stable") + '</span>' +
+            '</div>' +
+          '</div>';
+        })),
+        renderInspectList("Safe Devices", safeDevices.map(function (device) {
+          return '<div class="ocp-inspect-item">' +
+            '<div class="ocp-inspect-item__head">' +
+              '<span class="ocp-inspect-item__title">' + escapeHtml(device.display_name || device.peer_id || "device") + '</span>' +
+              '<span class="ocp-pill ' + inspectStatusTone(device.connected ? "connected" : "offline") + '">' + escapeHtml(String(device.device_class || "device").toUpperCase()) + '</span>' +
+            '</div>' +
+            '<div class="ocp-inspect-copy">' + escapeHtml(device.summary || "") + '</div>' +
+          '</div>';
+        })),
         renderInspectList("Child Jobs", childJobs.map(function (job) {
           return '<div class="ocp-inspect-item">' +
             '<div class="ocp-inspect-item__head">' +
@@ -3651,8 +3692,8 @@ def build_control_page(mesh: SovereignMesh) -> str:
         })),
         renderInspectList("Mission Lineage", [
           jobs.length ? '<div class="ocp-inspect-item"><div class="ocp-inspect-item__head"><span class="ocp-inspect-item__title">Job Lineage</span></div><div class="ocp-inspect-item__meta">' + jobs.map(function (job) { return '<span>' + escapeHtml(compactText(job.id || "", 26)) + '</span>'; }).join("") + '</div></div>' : "",
-          payload.latest_checkpoint_ref && payload.latest_checkpoint_ref.id ? '<div class="ocp-inspect-item"><div class="ocp-inspect-item__head"><span class="ocp-inspect-item__title">Checkpoint</span></div><div class="ocp-toolbar">' + renderArtifactLink("Open Artifact", payload.latest_checkpoint_ref) + '</div></div>' : "",
-          payload.result_bundle_ref && payload.result_bundle_ref.id ? '<div class="ocp-inspect-item"><div class="ocp-inspect-item__head"><span class="ocp-inspect-item__title">Result Bundle</span></div><div class="ocp-toolbar">' + renderArtifactLink("Open Result Bundle", payload.result_bundle_ref) + '</div></div>' : ""
+          checkpointArtifact && checkpointArtifact.id ? '<div class="ocp-inspect-item"><div class="ocp-inspect-item__head"><span class="ocp-inspect-item__title">Checkpoint</span></div><div class="ocp-toolbar">' + renderArtifactLink("Open Artifact", checkpointArtifact) + '</div></div>' : "",
+          resultBundle && resultBundle.id ? '<div class="ocp-inspect-item"><div class="ocp-inspect-item__head"><span class="ocp-inspect-item__title">Result Bundle</span></div><div class="ocp-toolbar">' + renderArtifactLink("Open Result Bundle", resultBundle) + '</div></div>' : ""
         ]),
         '<section class="ocp-inspect-section">' +
           '<h3 class="ocp-inspect-section__title">Raw JSON</h3>' +
@@ -6436,6 +6477,10 @@ class OCPHandler(BaseHTTPRequestHandler):
             )
         )
 
+    def _handle_mesh_mission_continuity_get(self, path: str):
+        mission_id = path[len("/mesh/missions/"):-len("/continuity")].strip("/")
+        self._send_json(self._mesh().get_mission_continuity(mission_id))
+
     def _handle_mesh_mission_get(self, path: str):
         self._send_json(self._mesh().get_mission(path.split("/mesh/missions/", 1)[1]))
 
@@ -7000,6 +7045,8 @@ class OCPHandler(BaseHTTPRequestHandler):
                 return self._handle_mesh_stream(params)
             if path == "/mesh/missions":
                 return self._handle_mesh_missions(params)
+            if path.startswith("/mesh/missions/") and path.endswith("/continuity"):
+                return self._handle_mesh_mission_continuity_get(path)
             if path.startswith("/mesh/missions/"):
                 return self._handle_mesh_mission_get(path)
             if path == "/mesh/cooperative-tasks":

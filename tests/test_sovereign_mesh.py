@@ -97,6 +97,7 @@ ProbeHandler._handle_mesh_peers_connect = server.OCPHandler._handle_mesh_peers_c
 ProbeHandler._handle_mesh_peers_connect_all = server.OCPHandler._handle_mesh_peers_connect_all
 ProbeHandler._handle_mesh_peers_sync = server.OCPHandler._handle_mesh_peers_sync
 ProbeHandler._handle_mesh_missions = server.OCPHandler._handle_mesh_missions
+ProbeHandler._handle_mesh_mission_continuity_get = server.OCPHandler._handle_mesh_mission_continuity_get
 ProbeHandler._handle_mesh_mission_get = server.OCPHandler._handle_mesh_mission_get
 ProbeHandler._handle_mesh_mission_launch = server.OCPHandler._handle_mesh_mission_launch
 ProbeHandler._handle_mesh_mission_test_launch = server.OCPHandler._handle_mesh_mission_test_launch
@@ -214,6 +215,10 @@ def make_mesh_http_server(mesh):
                 if path == "/mesh/missions":
                     limit = int(params.get("limit", ["25"])[0])
                     self._send_json(mesh.list_missions(limit=limit, status=params.get("status", [""])[0]))
+                    return
+                if path.startswith("/mesh/missions/") and path.endswith("/continuity"):
+                    mission_id = path[len("/mesh/missions/"):-len("/continuity")].strip("/")
+                    self._send_json(mesh.get_mission_continuity(mission_id))
                     return
                 if path.startswith("/mesh/missions/"):
                     self._send_json(mesh.get_mission(path.split("/mesh/missions/", 1)[1]))
@@ -4784,6 +4789,23 @@ class SovereignMeshTests(unittest.TestCase):
             checkpointed_mission["latest_checkpoint_ref"]["id"],
         )
 
+    def test_mission_continuity_summary_uses_plain_language_and_safe_devices(self):
+        beta = self.make_stack("beta")
+        state = self._checkpointed_mission(beta, request_id="mission-continuity-summary")
+        mission = state["mission"]
+
+        continuity = beta.mesh.get_mission_continuity(mission["id"])
+
+        self.assertEqual(continuity["mission_id"], mission["id"])
+        self.assertEqual(continuity["continuity_state"], "ready_to_continue")
+        self.assertEqual(continuity["recommended_action"], "resume")
+        self.assertEqual(continuity["recommended_action_label"], "Continue Mission")
+        self.assertIn("safe checkpoint", continuity["headline"].lower())
+        self.assertTrue(continuity["recovery"]["recoverable"])
+        self.assertTrue(continuity["artifacts"]["checkpoint"]["available"])
+        self.assertTrue(continuity["safe_devices"])
+        self.assertEqual(continuity["available_actions"][0]["action"], "resume")
+
     def test_mission_resume_latest_recovers_checkpointed_child_job(self):
         beta = self.make_stack("beta")
         state = self._checkpointed_mission(beta, request_id="mission-resume-latest")
@@ -4966,6 +4988,9 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(listed["count"], 1)
         fetched = alpha_client.get_mission(mission_id)
         self.assertEqual(fetched["id"], mission_id)
+        continuity = alpha_client.get_mission_continuity(mission_id)
+        self.assertEqual(continuity["mission_id"], mission_id)
+        self.assertTrue(continuity["available_actions"])
 
         cancelled = alpha_client.cancel_mission(mission_id, reason="http cancel")
         self.assertEqual(cancelled["mission"]["id"], mission_id)
@@ -5017,6 +5042,11 @@ class SovereignMeshTests(unittest.TestCase):
         probe._handle_mesh_missions({"limit": ["10"], "status": [""]})
         self.assertEqual(probe.code, 200)
         self.assertEqual(probe.payload["count"], 1)
+
+        probe = ProbeHandler()
+        probe._handle_mesh_mission_continuity_get(f"/mesh/missions/{mission_id}/continuity")
+        self.assertEqual(probe.code, 200)
+        self.assertEqual(probe.payload["mission_id"], mission_id)
 
         probe = ProbeHandler()
         probe._handle_mesh_mission_get(f"/mesh/missions/{mission_id}")

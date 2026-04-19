@@ -1131,6 +1131,9 @@ class MeshPeerClient:
     def get_mission(self, mission_id: str) -> dict:
         return self._request_json("GET", f"/mesh/missions/{mission_id}")
 
+    def get_mission_continuity(self, mission_id: str) -> dict:
+        return self._request_json("GET", f"/mesh/missions/{mission_id}/continuity")
+
     def launch_mission(self, payload: dict) -> dict:
         return self._request_json("POST", "/mesh/missions/launch", payload=payload)
 
@@ -4512,6 +4515,258 @@ class SovereignMesh:
                 "lineage": lineage,
             }
         return refreshed
+
+    def _continuity_artifact_state(self, artifact_ref: dict, *, label: str) -> dict:
+        ref = dict(artifact_ref or {})
+        if not ref.get("id"):
+            return {"label": label, "available": False, "artifact": {}, "pinned": False}
+        try:
+            artifact = self.get_artifact(ref["id"], include_content=False)
+        except Exception:
+            artifact = dict(ref)
+        return {
+            "label": label,
+            "available": True,
+            "artifact": artifact,
+            "pinned": bool(artifact.get("pinned")),
+        }
+
+    def _continuity_device_entry(
+        self,
+        *,
+        peer_id: str,
+        display_name: str,
+        trust_tier: str,
+        profile: dict,
+        connected: bool,
+        current: bool = False,
+    ) -> dict:
+        normalized_profile = _normalize_device_profile(profile)
+        sync_policy = self._device_profile_sync_policy(normalized_profile)
+        device_class = str(normalized_profile.get("device_class") or "full").strip().lower() or "full"
+        stability = (
+            "stable"
+            if device_class in {"full", "relay"} and not sync_policy.get("intermittent")
+            else ("portable" if device_class == "light" else "compact")
+        )
+        return {
+            "peer_id": str(peer_id or "").strip(),
+            "display_name": str(display_name or peer_id or "device").strip() or "device",
+            "trust_tier": _normalize_trust_tier(trust_tier or "trusted"),
+            "device_class": device_class,
+            "execution_tier": str(normalized_profile.get("execution_tier") or "").strip(),
+            "form_factor": str(normalized_profile.get("form_factor") or "").strip(),
+            "connected": bool(connected),
+            "current": bool(current),
+            "sleep_capable": bool(sync_policy.get("sleep_capable")),
+            "relay_recommended": bool(sync_policy.get("relay_recommended")),
+            "stability": stability,
+            "summary": _compact_text(
+                f"{display_name or peer_id or 'device'} is a {device_class} device with {stability} continuity posture.",
+                limit=120,
+            ),
+        }
+
+    def _mission_safe_devices(self, mission: dict, *, preferred_device_classes: Optional[list[str]] = None) -> list[dict]:
+        preferred = _unique_tokens(preferred_device_classes or [])
+        current_targets = {
+            str((child or {}).get("target") or self.node_id).strip() or self.node_id
+            for child in list(mission.get("child_jobs") or [])
+        }
+        devices: list[dict] = []
+        local_entry = self._continuity_device_entry(
+            peer_id=self.node_id,
+            display_name=self.display_name,
+            trust_tier="self",
+            profile=self.device_profile,
+            connected=True,
+            current=self.node_id in current_targets,
+        )
+        if not preferred or local_entry["device_class"] in set(preferred):
+            devices.append(local_entry)
+        for peer in list(self.list_peers(limit=500).get("peers") or []):
+            trust_tier = _normalize_trust_tier(peer.get("trust_tier") or "trusted")
+            if trust_tier not in {"self", "trusted", "partner"}:
+                continue
+            profile = self._peer_device_profile(peer)
+            entry = self._continuity_device_entry(
+                peer_id=peer.get("peer_id") or "",
+                display_name=peer.get("display_name") or peer.get("peer_id") or "peer",
+                trust_tier=trust_tier,
+                profile=profile,
+                connected=str(peer.get("status") or "").strip().lower() == "connected",
+                current=str(peer.get("peer_id") or "").strip() in current_targets,
+            )
+            if preferred and entry["device_class"] not in set(preferred):
+                continue
+            devices.append(entry)
+        unique_devices: list[dict] = []
+        seen_peer_ids: set[str] = set()
+        for device in devices:
+            peer_token = str(device.get("peer_id") or "").strip()
+            if not peer_token or peer_token in seen_peer_ids:
+                continue
+            seen_peer_ids.add(peer_token)
+            unique_devices.append(device)
+        unique_devices.sort(
+            key=lambda item: (
+                not bool(item.get("current")),
+                item.get("device_class") not in {"full", "relay"},
+                not bool(item.get("connected")),
+                item.get("trust_tier") not in {"self", "trusted"},
+                item.get("display_name") or item.get("peer_id") or "",
+            )
+        )
+        return unique_devices
+
+    def _mission_continuity_actions(self, mission: dict) -> list[dict]:
+        status = str(mission.get("status") or "planned").strip().lower()
+        continuity = dict(mission.get("continuity") or {})
+        actions: list[dict] = []
+        if continuity.get("resumable") and status in {"checkpointed", "failed", "waiting"}:
+            actions.append(
+                {
+                    "action": "resume",
+                    "label": "Continue Mission",
+                    "description": "Resume from the latest safe checkpoint on a trusted device.",
+                    "primary": True,
+                }
+            )
+        if continuity.get("checkpoint_ready") and status in {"checkpointed", "failed", "waiting"}:
+            actions.append(
+                {
+                    "action": "resume_from_checkpoint",
+                    "label": "Recover From Checkpoint",
+                    "description": "Resume from the most recent saved checkpoint.",
+                    "primary": False,
+                }
+            )
+        if status not in {"completed", "cancelled", "active"}:
+            actions.append(
+                {
+                    "action": "restart",
+                    "label": "Restart Cleanly",
+                    "description": "Start the mission again from the beginning.",
+                    "primary": False,
+                }
+            )
+        if status not in {"completed", "cancelled"}:
+            actions.append(
+                {
+                    "action": "cancel",
+                    "label": "Stop Mission",
+                    "description": "Cancel the mission and stop further work.",
+                    "primary": False,
+                }
+            )
+        return actions
+
+    def get_mission_continuity(self, mission_id: str) -> dict:
+        mission = self.get_mission(mission_id)
+        continuity = dict(mission.get("continuity") or {})
+        child_jobs = [dict(item or {}) for item in list(mission.get("child_jobs") or [])]
+        status = str(mission.get("status") or "planned").strip().lower()
+        checkpoint_ready = bool(continuity.get("checkpoint_ready"))
+        resumable = bool(continuity.get("resumable"))
+        preferred_device_classes: list[str] = []
+        recommended_action = "wait"
+        recommended_reason = ""
+        for child in child_jobs:
+            recovery = dict(child.get("recovery") or {})
+            hint = dict(recovery.get("recovery_hint") or {})
+            preferred_device_classes.extend(_unique_tokens(hint.get("preferred_target_device_classes") or []))
+            if not recommended_reason and hint:
+                recommended_reason = _compact_text(
+                    hint.get("reason")
+                    or hint.get("strategy")
+                    or "trusted continuity move recommended",
+                    limit=120,
+                )
+            if hint.get("recommended_action") in {"resume", "restart"}:
+                recommended_action = str(hint.get("recommended_action") or "wait").strip().lower()
+        preferred_device_classes = _unique_tokens(preferred_device_classes)
+        if checkpoint_ready and status in {"checkpointed", "failed", "waiting"}:
+            continuity_state = "ready_to_continue"
+            headline = "Ready to continue from the last safe checkpoint."
+            recommended_action = "resume"
+            if not preferred_device_classes:
+                preferred_device_classes = ["full", "relay"]
+        elif resumable and status in {"checkpointed", "failed", "waiting"}:
+            continuity_state = "attention_needed"
+            headline = "Mission can continue, but it needs a recovery decision."
+            recommended_action = "resume"
+            if not preferred_device_classes:
+                preferred_device_classes = ["full", "relay"]
+        elif status == "active":
+            continuity_state = "in_progress"
+            headline = "Mission is currently running across your trusted devices."
+        elif status == "completed":
+            continuity_state = "completed"
+            headline = "Mission is complete and the results are ready."
+            recommended_action = "review"
+        elif status == "cancelled":
+            continuity_state = "stopped"
+            headline = "Mission has been stopped."
+            recommended_action = "none"
+        else:
+            continuity_state = "preparing"
+            headline = "Mission is preparing to run."
+        safe_devices = self._mission_safe_devices(mission, preferred_device_classes=preferred_device_classes)
+        current_devices = [item for item in safe_devices if item.get("current")]
+        recommended_device = next(
+            (
+                item
+                for item in safe_devices
+                if item.get("peer_id") not in {device.get("peer_id") for device in current_devices}
+            ),
+            (safe_devices[0] if safe_devices else {}),
+        )
+        checkpoint_state = self._continuity_artifact_state(
+            dict(mission.get("latest_checkpoint_ref") or {}),
+            label="Latest Checkpoint",
+        )
+        result_bundle_state = self._continuity_artifact_state(
+            dict(mission.get("result_bundle_ref") or {}),
+            label="Result Bundle",
+        )
+        return {
+            "mission_id": mission["id"],
+            "title": mission.get("title") or "Mission",
+            "status": mission.get("status") or "planned",
+            "continuity_state": continuity_state,
+            "headline": headline,
+            "operator_summary": _compact_text(
+                recommended_reason
+                or headline
+                or "Mission continuity state is available.",
+                limit=160,
+            ),
+            "intent": mission.get("intent") or "",
+            "recommended_action": recommended_action,
+            "recommended_action_label": {
+                "resume": "Continue Mission",
+                "restart": "Restart Cleanly",
+                "review": "Review Results",
+                "wait": "Keep Watching",
+                "none": "No Action Needed",
+            }.get(recommended_action, "Continue Mission"),
+            "current_devices": current_devices,
+            "recommended_device": recommended_device or {},
+            "safe_devices": safe_devices,
+            "preferred_target_device_classes": preferred_device_classes,
+            "recovery": {
+                "recoverable": bool(resumable and status in {"checkpointed", "failed", "waiting"}),
+                "checkpoint_ready": checkpoint_ready,
+                "recommended_action": recommended_action,
+                "reason": recommended_reason,
+            },
+            "artifacts": {
+                "checkpoint": checkpoint_state,
+                "result_bundle": result_bundle_state,
+            },
+            "available_actions": self._mission_continuity_actions(mission),
+            "mission": mission,
+        }
 
     def launch_mission(
         self,
