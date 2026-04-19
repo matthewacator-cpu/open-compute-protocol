@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import errno
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -20,6 +21,14 @@ server_context = {
     "runtime": None,
     "ready": False,
 }
+
+
+def _is_client_disconnect(exc: BaseException) -> bool:
+    if isinstance(exc, (BrokenPipeError, ConnectionResetError)):
+        return True
+    if isinstance(exc, OSError):
+        return exc.errno in {errno.EPIPE, errno.ECONNRESET, 54, 104}
+    return False
 
 
 def _latest_event_cursor(mesh: SovereignMesh) -> int:
@@ -4559,6 +4568,14 @@ class OCPHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         return
 
+    def handle(self):
+        try:
+            super().handle()
+        except Exception as exc:
+            if _is_client_disconnect(exc):
+                return
+            raise
+
     def _mesh(self):
         server_obj = getattr(self, "server", None)
         mesh = getattr(server_obj, "mesh", None) or server_context.get("mesh")
@@ -4587,11 +4604,11 @@ class OCPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
-    def _begin_sse(self):
+    def _begin_sse(self, *, close_connection: bool = False):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
+        self.send_header("Connection", "close" if close_connection else "keep-alive")
         self.send_header("X-Accel-Buffering", "no")
         self.end_headers()
 
@@ -4627,7 +4644,7 @@ class OCPHandler(BaseHTTPRequestHandler):
         once = params.get("once", ["0"])[0] in {"1", "true", "yes"}
         heartbeat_seconds = max(2.0, float(params.get("heartbeat", ["10"])[0] or 10.0))
         try:
-            self._begin_sse()
+            self._begin_sse(close_connection=once)
             opened = {"status": "ok", "cursor": cursor, "route": "/mesh/control/stream"}
             self._write_sse_event("stream-open", opened, event_id=str(cursor))
             snapshot = mesh.stream_snapshot(since_seq=cursor, limit=limit)
@@ -4635,6 +4652,7 @@ class OCPHandler(BaseHTTPRequestHandler):
             cursor = int(envelope.get("cursor") or cursor)
             self._write_sse_event("control-state", envelope, event_id=str(cursor))
             if once:
+                self.close_connection = True
                 return
             last_keepalive = time.monotonic()
             while True:

@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -4405,6 +4406,43 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("event: control-state", body)
         self.assertIn("HTTP Stream Mission", body)
         self.assertIn("mesh.mission.launched", body)
+
+    def test_control_stream_once_closes_cleanly_on_real_http_handler(self):
+        alpha = self.make_stack("alpha")
+        alpha.mesh.launch_mission(
+            title="Real Handler Stream Mission",
+            intent="Verify one-shot SSE closes cleanly",
+            request_id="control-stream-real-handler",
+            job={
+                "kind": "python.inline",
+                "dispatch_mode": "queued",
+                "requirements": {"capabilities": ["python"]},
+                "policy": {"classification": "trusted", "mode": "batch"},
+                "payload": {"code": "print('real handler mission')"},
+            },
+        )
+        httpd = server.build_http_server(alpha.mesh, host="127.0.0.1", port=0)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with urlopen(f"http://127.0.0.1:{port}/mesh/control/stream?since=0&limit=20&once=1") as response:
+                body = response.read().decode("utf-8")
+                content_type = response.headers.get("Content-Type")
+            self.assertEqual(content_type, "text/event-stream")
+            self.assertIn("event: stream-open", body)
+            self.assertIn("event: control-state", body)
+            self.assertIn("Real Handler Stream Mission", body)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    def test_client_disconnect_helper_matches_common_socket_errors(self):
+        self.assertTrue(server._is_client_disconnect(ConnectionResetError()))
+        self.assertTrue(server._is_client_disconnect(BrokenPipeError()))
+        self.assertTrue(server._is_client_disconnect(OSError(54, "Connection reset by peer")))
+        self.assertFalse(server._is_client_disconnect(RuntimeError("boom")))
 
     def test_mission_launch_wraps_local_job_and_tracks_completion(self):
         beta = self.make_stack("beta")
