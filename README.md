@@ -33,6 +33,10 @@
 
 <br/>
 
+<img src="./assets/ocp-hero.svg" alt="Open Compute Protocol hero" width="100%" />
+
+<br/>
+
 </div>
 
 ---
@@ -87,6 +91,10 @@ That is the difference between *scripts on a few boxes* and a real compute proto
 ---
 
 ## Architecture
+
+<p align="center">
+  <img src="./assets/ocp-architecture.svg" alt="OCP architecture layers" width="100%" />
+</p>
 
 | Surface | Role |
 |---|---|
