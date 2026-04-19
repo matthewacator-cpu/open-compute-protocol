@@ -4,7 +4,7 @@
 
 We want OCP to be a project where people can contribute thoughtfully, disagree clearly, and collaborate without hostility.
 
-Participation in this project should be free from harassment, intimidation, and personal attacks.
+Participation in this project should be free from harassment, intimidation, discrimination, and personal attacks.
 
 ## Expected Behavior
 
@@ -17,10 +17,11 @@ Participation in this project should be free from harassment, intimidation, and 
 ## Unacceptable Behavior
 
 - harassment or discrimination
-- abusive or demeaning language
+- abusive, threatening, or demeaning language
 - bad-faith review behavior
 - personal attacks
 - deliberately disruptive conduct
+- publishing someone else's private information without permission
 
 ## Enforcement
 

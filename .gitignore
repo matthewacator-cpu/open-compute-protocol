@@ -4,11 +4,49 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Local node state and identity
+.local/
+.mesh/
+.mesh-*/
 .mesh-smoke/
+identity/
+identities/
 *.db
+*.db-*
 *.sqlite
 *.sqlite3
+*.sqlite3-*
 
+# Secrets and environment files
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.der
+
+# Logs, temp files, and runtime output
+*.log
+logs/
+tmp/
+*.tmp
+*.pid
+*.out
+*.err
+
+# Python tooling caches
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
+.venv/
+venv/
+env/
+
+# Editor / OS state
+.vscode/
+.idea/
+*.swp
+*.swo

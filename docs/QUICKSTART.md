@@ -34,7 +34,21 @@ In a second terminal:
 curl http://127.0.0.1:8421/mesh/manifest
 ```
 
-## 4. Run the regression suite
+## 4. Seed the control deck with demo activity
+
+A fresh standalone node starts empty. If you want the UI to show missions, queue activity, notifications, and approvals right away, run:
+
+```bash
+python3 scripts/seed_control_demo.py --base-url http://127.0.0.1:8421
+```
+
+Then refresh:
+
+```text
+http://127.0.0.1:8421/control
+```
+
+## 5. Run the regression suite
 
 ```bash
 python3 -m unittest tests.test_sovereign_mesh
@@ -53,6 +67,12 @@ Bind so another machine on your network can reach it:
 
 ```bash
 OCP_HOST=0.0.0.0 ./scripts/start_ocp.sh
+```
+
+If you are testing the UI from another machine and the deck is empty, seed activity against the LAN URL:
+
+```bash
+python3 scripts/seed_control_demo.py --base-url http://HOST_IP:8421
 ```
 
 Set a custom node identity:

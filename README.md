@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/ocp-hero.svg" alt="Open Compute Protocol" width="100%" />
+  <img src="./assets/ocp-hero.png" alt="Open Compute Protocol" width="100%" />
 </p>
 
 <br/>
@@ -131,6 +131,14 @@ Some devices are powerful. Some are private. Some are fragile. Some are approval
 
 ---
 
+## Prerequisites
+
+- Python 3.11+
+- Bash-compatible shell for `./scripts/start_ocp.sh`
+- No external services required for the standalone local node flow
+
+---
+
 ## Quick Start
 
 ```bash
@@ -143,6 +151,12 @@ Then open the control deck:
 
 ```text
 http://127.0.0.1:8421/control
+```
+
+If the deck is empty on a fresh node, seed demo activity in a second terminal:
+
+```bash
+python3 scripts/seed_control_demo.py --base-url http://127.0.0.1:8421
 ```
 
 If you want the direct server form instead of the helper script:
@@ -180,6 +194,12 @@ The deck is phone-friendly, so your phone can act as a real operator console for
 - Autonomy posture
 - Offload memory
 
+For remote UI testing on a fresh standalone node, use:
+
+```bash
+python3 scripts/seed_control_demo.py --base-url http://HOST_IP:8421
+```
+
 ---
 
 ## Visual Identity
@@ -206,6 +226,24 @@ python3 server.py --help
 ```
 
 Current baseline: **119 tests passing.**
+
+---
+
+## Current Status
+
+**Implemented today**
+
+- standalone local node startup
+- peer identity, manifests, sync, and discovery
+- queued jobs, missions, cooperative tasks, and recovery controls
+- helper enlistment, mesh pressure, and operator approvals
+- built-in `/control` operator UI
+
+**Still evolving**
+
+- policy and treaty semantics
+- continuity-vessel and richer artifact lineage work
+- broader multi-device orchestration UX
 
 ---
 
