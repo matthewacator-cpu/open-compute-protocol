@@ -249,7 +249,146 @@ class MeshSchedulerService:
             "score": max(-120, min(120, score)),
         }
 
-    def local_candidate_score(self, job: dict) -> tuple[int, list[str]]:
+    def continuity_preferences(self, job: dict) -> dict:
+        metadata = dict(job.get("metadata") or {})
+        continuity = dict(job.get("continuity") or metadata.get("continuity") or {})
+        recovery_hint = dict(metadata.get("recovery_hint") or {})
+
+        def _tokens(values) -> list[str]:
+            seen: list[str] = []
+            for item in list(values or []):
+                token = str(item or "").strip().lower()
+                if token and token not in seen:
+                    seen.append(token)
+            return seen
+
+        continuity_class = str(
+            continuity.get("continuity_class")
+            or continuity.get("mode")
+            or ""
+        ).strip().lower()
+        epoch_tolerance = str(continuity.get("epoch_tolerance") or "").strip().lower()
+        dormancy_ok = bool(continuity.get("dormancy_ok"))
+        treaty_requirements = _tokens(continuity.get("treaty_requirements") or metadata.get("treaty_requirements") or [])
+        preferred_target_device_classes = _tokens(
+            recovery_hint.get("preferred_target_device_classes")
+            or continuity.get("preferred_target_device_classes")
+            or []
+        )
+        lineage_ref = str(continuity.get("lineage_ref") or metadata.get("lineage_ref") or "").strip()
+        active = any(
+            [
+                continuity_class,
+                epoch_tolerance,
+                dormancy_ok,
+                treaty_requirements,
+                preferred_target_device_classes,
+                lineage_ref,
+            ]
+        )
+        preferred_habitat_roles: list[str] = []
+        if continuity_class in {"durable", "archival"}:
+            preferred_habitat_roles.extend(["archive", "foundry"])
+        if dormancy_ok or epoch_tolerance == "long_dormancy_ok":
+            preferred_habitat_roles.append("vessel")
+        if treaty_requirements:
+            preferred_habitat_roles.extend(["sanctuary", "witness"])
+        return {
+            "active": active,
+            "continuity_class": continuity_class,
+            "epoch_tolerance": epoch_tolerance,
+            "dormancy_ok": dormancy_ok,
+            "treaty_requirements": treaty_requirements,
+            "preferred_target_device_classes": preferred_target_device_classes,
+            "preferred_habitat_roles": _tokens(preferred_habitat_roles),
+            "lineage_ref": lineage_ref,
+        }
+
+    def continuity_alignment(
+        self,
+        *,
+        device_profile: dict,
+        habitat_roles: list[str],
+        continuity_capabilities: dict,
+        trust_tier: str,
+        remote: bool,
+        job: dict,
+    ) -> tuple[int, list[str], dict]:
+        preferences = self.continuity_preferences(job)
+        alignment = {
+            "active": bool(preferences.get("active")),
+            "continuity_class": preferences.get("continuity_class") or "",
+            "epoch_tolerance": preferences.get("epoch_tolerance") or "",
+            "dormancy_ok": bool(preferences.get("dormancy_ok")),
+            "preferred_target_device_classes": list(preferences.get("preferred_target_device_classes") or []),
+            "preferred_habitat_roles": list(preferences.get("preferred_habitat_roles") or []),
+            "treaty_requirements": list(preferences.get("treaty_requirements") or []),
+            "lineage_ref": preferences.get("lineage_ref") or "",
+            "matched_device_class": False,
+            "matched_habitat_roles": [],
+            "continuity_capabilities": dict(continuity_capabilities or {}),
+        }
+        if not alignment["active"]:
+            return 0, [], alignment
+
+        reasons: list[str] = []
+        bonus = 0
+        normalized_profile = self.mesh._normalize_device_profile(device_profile)
+        device_class = str(normalized_profile.get("device_class") or "full").strip().lower() or "full"
+        role_set = {str(item or "").strip().lower() for item in habitat_roles if str(item or "").strip()}
+        matched_habitat_roles = [
+            role for role in list(preferences.get("preferred_habitat_roles") or [])
+            if role in role_set
+        ]
+        alignment["matched_habitat_roles"] = matched_habitat_roles
+
+        continuity_class = str(preferences.get("continuity_class") or "").strip().lower()
+        if continuity_class in {"durable", "archival"}:
+            reasons.append("continuity_durable")
+            if continuity_capabilities.get("vessel_storage"):
+                bonus += 90
+                reasons.append("continuity_storage_preferred")
+            if "archive" in role_set:
+                bonus += 60
+                reasons.append("habitat_archive")
+            if remote and self.mesh._normalize_trust_tier(trust_tier) in {"trusted", "partner"}:
+                bonus += 20
+                reasons.append("trusted_continuity_lane")
+
+        if bool(preferences.get("dormancy_ok")) or str(preferences.get("epoch_tolerance") or "") == "long_dormancy_ok":
+            reasons.append("long_dormancy_ok")
+            if continuity_capabilities.get("long_sleep"):
+                bonus += 80
+                reasons.append("long_sleep_capable")
+            if "vessel" in role_set:
+                bonus += 40
+                reasons.append("habitat_vessel")
+
+        preferred_device_classes = list(preferences.get("preferred_target_device_classes") or [])
+        if preferred_device_classes:
+            if device_class in set(preferred_device_classes):
+                alignment["matched_device_class"] = True
+                bonus += 260
+                reasons.append("continuity_preferred_device_class")
+            else:
+                reasons.append("continuity_device_class_miss")
+
+        treaty_requirements = list(preferences.get("treaty_requirements") or [])
+        if treaty_requirements:
+            reasons.append("treaty_requirements_present")
+            if continuity_capabilities.get("custody_review"):
+                bonus += 40
+                reasons.append("custody_review_capable")
+            if "sanctuary" in role_set or "witness" in role_set:
+                bonus += 30
+                reasons.append("treaty_witness_capable")
+
+        if preferences.get("lineage_ref"):
+            reasons.append("lineage_ref_present")
+
+        return bonus, reasons, alignment
+
+    def local_candidate_score(self, job: dict) -> tuple[int, list[str], dict]:
         requirements = dict(job.get("requirements") or {})
         placement = self.mesh._normalized_placement(job)
         kind = (job.get("kind") or "").strip().lower()
@@ -260,6 +399,14 @@ class MeshSchedulerService:
         reliability = self.local_reliability_summary()
         load = self.local_load_summary()
         device_profile = dict(self.mesh.device_profile)
+        continuity_bonus, continuity_reasons, continuity_alignment = self.continuity_alignment(
+            device_profile=device_profile,
+            habitat_roles=self.mesh._device_profile_habitat_roles(device_profile),
+            continuity_capabilities=self.mesh._continuity_capabilities(device_profile),
+            trust_tier="self",
+            remote=False,
+            job=job,
+        )
         reasons.extend(self.mesh._device_profile_schedule_reasons(device_profile))
         if placement["stay_local"]:
             reasons.append("stay_local")
@@ -280,11 +427,12 @@ class MeshSchedulerService:
             )
         )
         reasons.append(f"resume_capable={str(sync_resilience['resume_capable']).lower()}")
+        reasons.extend(continuity_reasons)
         if not self.mesh._requirements_satisfied(requirements):
-            return -10000, reasons + ["requirements_unmet"]
+            return -10000, reasons + ["requirements_unmet"], continuity_alignment
         device_ok, device_reason = self.mesh._device_profile_allows_job(device_profile, job, requires_worker=requires_worker)
         if not device_ok:
-            return -10000, reasons + [device_reason]
+            return -10000, reasons + [device_reason], continuity_alignment
         device_score, device_reasons = self.mesh._device_profile_schedule_score(
             device_profile,
             placement,
@@ -293,15 +441,15 @@ class MeshSchedulerService:
             sync_resilience=sync_resilience,
         )
         if device_score <= -10000:
-            return -10000, reasons + device_reasons
+            return -10000, reasons + device_reasons, continuity_alignment
         reasons.extend(device_reasons)
         if placement["max_local_queue_depth"] is not None and load["queue_depth"] > placement["max_local_queue_depth"]:
-            return -10000, reasons + ["local_backlog_limit_exceeded"]
+            return -10000, reasons + ["local_backlog_limit_exceeded"], continuity_alignment
         if requires_worker:
             workers = self.mesh.list_workers(limit=100)["workers"]
             matching_workers = [worker for worker in workers if self.mesh._requirements_satisfied_for_worker(requirements, worker)]
             if not matching_workers:
-                return -10000, reasons + ["no_matching_local_worker"]
+                return -10000, reasons + ["no_matching_local_worker"], continuity_alignment
             available_slots = sum(
                 max(0, int(worker.get("max_concurrent_jobs") or 1) - int(worker.get("active_attempts") or 0))
                 for worker in matching_workers
@@ -316,6 +464,7 @@ class MeshSchedulerService:
                 - (self.mesh._local_queue_depth() * 10)
                 + reliability["score"]
                 + device_score
+                + continuity_bonus
                 - int(load.get("scheduler_penalty") or 0)
             )
             if placement["stay_local"]:
@@ -337,8 +486,8 @@ class MeshSchedulerService:
             elif placement["execution_class"] == "latency":
                 score += 90
                 reasons.append("execution_class_latency")
-            return score, reasons
-        score = self.trust_score("self") + 120 + reliability["score"] + device_score - int(load.get("scheduler_penalty") or 0)
+            return score, reasons, continuity_alignment
+        score = self.trust_score("self") + 120 + reliability["score"] + device_score + continuity_bonus - int(load.get("scheduler_penalty") or 0)
         if placement["stay_local"]:
             score += 300
         if placement["latency_sensitive"]:
@@ -358,9 +507,9 @@ class MeshSchedulerService:
         elif placement["execution_class"] == "latency":
             score += 90
             reasons.append("execution_class_latency")
-        return score, reasons + ["inline_capable"]
+        return score, reasons + ["inline_capable"], continuity_alignment
 
-    def peer_candidate_score(self, peer: dict, job: dict) -> tuple[int, list[str]]:
+    def peer_candidate_score(self, peer: dict, job: dict) -> tuple[int, list[str], dict]:
         requirements = dict(job.get("requirements") or {})
         policy = self.mesh._normalize_policy(job.get("policy") or {})
         placement = self.mesh._normalized_placement(job)
@@ -371,6 +520,14 @@ class MeshSchedulerService:
         requires_worker = self.mesh._dispatch_mode_requires_worker(kind, dispatch_mode)
         sync_resilience = self.mesh._job_sync_resilience(job)
         device_profile = self.mesh._peer_device_profile(peer)
+        continuity_bonus, continuity_reasons, continuity_alignment = self.continuity_alignment(
+            device_profile=device_profile,
+            habitat_roles=list(peer.get("habitat_roles") or self.mesh._device_profile_habitat_roles(device_profile)),
+            continuity_capabilities=dict(peer.get("continuity_capabilities") or self.mesh._continuity_capabilities(device_profile)),
+            trust_tier=peer.get("trust_tier") or "trusted",
+            remote=True,
+            job=job,
+        )
         reasons = [f"trust_tier={peer.get('trust_tier') or 'trusted'}", f"queue_class={placement['queue_class']}"]
         reasons.append(f"execution_class={placement['execution_class']}")
         reasons.append(f"remote_queue_depth={load['queue_depth']}")
@@ -385,24 +542,25 @@ class MeshSchedulerService:
             )
         )
         reasons.append(f"resume_capable={str(sync_resilience['resume_capable']).lower()}")
+        reasons.extend(continuity_reasons)
         if placement["stay_local"]:
-            return -10000, reasons + ["stay_local"]
+            return -10000, reasons + ["stay_local"], continuity_alignment
         if placement["trust_floor"] and not self.trust_meets_floor(peer.get("trust_tier") or "trusted", placement["trust_floor"]):
-            return -10000, reasons + ["trust_floor_denied"]
+            return -10000, reasons + ["trust_floor_denied"], continuity_alignment
         if placement["required_peer_ids"] and peer.get("peer_id") not in set(placement["required_peer_ids"]):
-            return -10000, reasons + ["peer_not_required"]
+            return -10000, reasons + ["peer_not_required"], continuity_alignment
         if placement["avoid_public"] and self.mesh._peer_is_public_lane(peer):
-            return -10000, reasons + ["avoid_public"]
+            return -10000, reasons + ["avoid_public"], continuity_alignment
         if placement["max_peer_queue_depth"] is not None and load["queue_depth"] > placement["max_peer_queue_depth"]:
-            return -10000, reasons + ["peer_backlog_limit_exceeded"]
+            return -10000, reasons + ["peer_backlog_limit_exceeded"], continuity_alignment
         if not self.mesh._policy_allows_peer(policy, peer):
-            return -10000, reasons + ["policy_denied"]
+            return -10000, reasons + ["policy_denied"], continuity_alignment
         needed = {str(item).strip() for item in (requirements.get("capabilities") or []) if str(item).strip()}
         if not needed.issubset(self.mesh._peer_capabilities(peer)):
-            return -10000, reasons + ["requirements_unmet"]
+            return -10000, reasons + ["requirements_unmet"], continuity_alignment
         device_ok, device_reason = self.mesh._device_profile_allows_job(device_profile, job, requires_worker=requires_worker)
         if not device_ok:
-            return -10000, reasons + [device_reason]
+            return -10000, reasons + [device_reason], continuity_alignment
         device_score, device_reasons = self.mesh._device_profile_schedule_score(
             device_profile,
             placement,
@@ -411,7 +569,7 @@ class MeshSchedulerService:
             sync_resilience=sync_resilience,
         )
         if device_score <= -10000:
-            return -10000, reasons + device_reasons
+            return -10000, reasons + device_reasons, continuity_alignment
         reasons.extend(device_reasons)
         if requires_worker:
             worker_count = self.mesh._peer_worker_count(peer)
@@ -419,8 +577,8 @@ class MeshSchedulerService:
             reasons.append(f"remote_workers={worker_count}")
             reasons.append(f"available_slots={available_slots}")
             if worker_count <= 0:
-                return -10000, reasons + ["no_remote_workers_advertised"]
-        score = self.trust_score(peer.get("trust_tier") or "trusted") + reliability["score"] + device_score
+                return -10000, reasons + ["no_remote_workers_advertised"], continuity_alignment
+        score = self.trust_score(peer.get("trust_tier") or "trusted") + reliability["score"] + device_score + continuity_bonus
         if peer.get("status") == "connected":
             score += 40
             reasons.append("connected")
@@ -489,7 +647,7 @@ class MeshSchedulerService:
         elif enlistment_state == "draining":
             score -= 140
             reasons.append("helper_draining_penalty")
-        return score, reasons
+        return score, reasons, continuity_alignment
 
     def select_execution_target(
         self,
@@ -504,19 +662,20 @@ class MeshSchedulerService:
         placement = self.mesh._normalized_placement(normalized_job)
         candidates = []
         if allow_local:
-            score, reasons = self.local_candidate_score(normalized_job)
+            score, reasons, continuity_alignment = self.local_candidate_score(normalized_job)
             candidates.append(
                 {
                     "target_type": "local",
                     "peer_id": self.mesh.node_id,
                     "score": score,
                     "reasons": reasons,
+                    "continuity_alignment": continuity_alignment,
                     "selected": False,
                 }
             )
         if allow_remote:
             for peer in self.mesh.list_peers(limit=500).get("peers", []):
-                score, reasons = self.peer_candidate_score(peer, normalized_job)
+                score, reasons, continuity_alignment = self.peer_candidate_score(peer, normalized_job)
                 if preferred_peer_id and peer["peer_id"] == preferred_peer_id:
                     score += 500
                     reasons = list(reasons) + ["preferred_peer"]
@@ -526,6 +685,7 @@ class MeshSchedulerService:
                         "peer_id": peer["peer_id"],
                         "score": score,
                         "reasons": reasons,
+                        "continuity_alignment": continuity_alignment,
                         "selected": False,
                     }
                 )

@@ -6,6 +6,7 @@ Related planning docs:
 
 - `docs/OCP_MASTER_PLAN.md`
 - `docs/OCP_ALL_DEVICES_PLAN.md`
+- `docs/OCP_7026_VISION.md`
 - `docs/QUICKSTART.md`
 
 ## Current framing
@@ -80,6 +81,12 @@ Related planning docs:
 - First Mission Layer with durable mission objects above jobs and cooperative task groups
 - Mission launch paths that wrap a single local job or a cooperative task launch without replacing existing execution primitives
 - Mission continuity tracking with child-job lineage, checkpoint/result references, UI drill-down links, mission-level resume/restart/cancel controls, and status propagation from execution state
+- Continuity export alpha with dry-run vessel planning and sealed vessel/witness artifact publication for mission continuity state
+- Continuity verification alpha with vessel verification and dry-run restore planning over the mesh API
+- Continuity metadata overlays now surface in mission state, manifests, and peer listings with habitat-role and continuity-capability hints
+- Scheduler decisions now include continuity-aware soft preferences and explainable candidate alignment for continuity metadata and habitat roles
+- First treaty groundwork for continuity custody with normalized treaty documents, treaty listing/proposal APIs, continuity export validation, and treaty-aware restore blocking/reporting
+- Treaty posture now surfaces in manifests, peer summaries, and mission continuity summaries, with an audit endpoint for operator-readable treaty validation guidance
 - Mesh Pulse control-deck panorama with live mission/queue/helper/approval/notification summaries and a cross-system activity stream for operator visibility
 - In-place operator inspect overlay for mission, queue-job, and cooperative-task drill-down without leaving the cockpit
 - Compute-profile-aware device modeling with CPU, memory, disk, accelerator, GPU class, and VRAM hints
@@ -132,6 +139,8 @@ Related planning docs:
 - Provider-backed secret delivery with redacted job surfaces and attested execution metadata
 - OCI-shaped artifact packaging and signed provenance attestations
 - First artifact mobility foundation for multi-device and intermittent-peer workflows
+- First continuity-vessel artifact baseline with reserved `vessel` and `witness` artifact kinds
+- First treaty-aware continuity governance baseline with explicit treaty references on mission continuity overlays and exported vessels
 - Stronger replicated-artifact lifecycle for bundle, checkpoint, and attestation-linked sync flows
 - First bundle/checkpoint graph sync foundation for richer multi-device recovery and result mobility
 - Device-class-aware peer identity, intermittent sync posture, and recovery foundations for all-device mesh expansion
@@ -183,6 +192,10 @@ Related planning docs:
 - Approval inbox: `GET /mesh/approvals`
 - Approval request: `POST /mesh/approvals/request`
 - Approval resolve: `POST /mesh/approvals/{approval_id}/resolve`
+- Treaty list: `GET /mesh/treaties`
+- Treaty inspect: `GET /mesh/treaties/{treaty_id}`
+- Treaty propose: `POST /mesh/treaties/propose`
+- Treaty audit: `POST /mesh/treaties/audit`
 - Discovery candidates: `GET /mesh/discovery/candidates`
 - Discovery seek: `POST /mesh/discovery/seek`
 - Local discovery scan: `POST /mesh/discovery/scan-local`
@@ -194,6 +207,9 @@ Related planning docs:
 - Mission launch: `POST /mesh/missions/launch`
 - Mission test launch: `POST /mesh/missions/test-launch`
 - Whole-mesh test launch: `POST /mesh/missions/test-mesh-launch`
+- Mission continuity export: `POST /mesh/missions/{mission_id}/continuity/export`
+- Continuity vessel verify: `POST /mesh/continuity/vessels/verify`
+- Continuity restore plan: `POST /mesh/continuity/vessels/restore-plan`
 - Mission cancel: `POST /mesh/missions/{mission_id}/cancel`
 - Mission resume latest: `POST /mesh/missions/{mission_id}/resume`
 - Mission resume checkpoint: `POST /mesh/missions/{mission_id}/resume-from-checkpoint`
@@ -248,4 +264,4 @@ python3 -m unittest tests.test_sovereign_mesh
 ```
 
 Current standalone baseline:
-- `tests.test_sovereign_mesh`: 119 tests passing
+- `tests.test_sovereign_mesh`: 147 tests passing

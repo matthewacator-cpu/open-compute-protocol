@@ -47,6 +47,8 @@ from mesh_protocol import (
     PROTOCOL_RELEASE,
     PROTOCOL_SHORT_NAME,
     PROTOCOL_VERSION,
+    normalize_treaty_document,
+    normalize_treaty_status,
 )
 from mesh_scheduler import MeshSchedulerService
 from mesh_state import MeshStateService
@@ -414,12 +416,21 @@ def _normalize_mission_continuity(raw: Optional[dict]) -> dict:
         checkpoint_strategy = "inherit" if resumable else "none"
     continuity = {
         "mode": str(data.get("mode") or ("durable" if resumable else "ephemeral")).strip().lower() or "durable",
+        "continuity_class": str(
+            data.get("continuity_class")
+            or data.get("mode")
+            or ("durable" if resumable else "ephemeral")
+        ).strip().lower() or "durable",
         "resumable": resumable,
         "checkpoint_strategy": checkpoint_strategy,
         "allow_handoff": _coerce_bool(data.get("allow_handoff") if "allow_handoff" in data else True),
         "preserve_result_lineage": _coerce_bool(
             data.get("preserve_result_lineage") if "preserve_result_lineage" in data else True
         ),
+        "lineage_ref": str(data.get("lineage_ref") or "").strip(),
+        "epoch_tolerance": str(data.get("epoch_tolerance") or "").strip().lower(),
+        "dormancy_ok": _coerce_bool(data.get("dormancy_ok")) if "dormancy_ok" in data else False,
+        "treaty_requirements": _unique_tokens(data.get("treaty_requirements") or []),
     }
     if data.get("notes"):
         continuity["notes"] = str(data.get("notes") or "")
@@ -781,6 +792,10 @@ class OrganismCard:
     capability_cards: list[dict[str, Any]]
     policy_summary: dict[str, Any]
     device_profile: dict[str, Any]
+    habitat_roles: list[str] = dataclasses.field(default_factory=list)
+    continuity_capabilities: dict[str, Any] = dataclasses.field(default_factory=dict)
+    treaty_capabilities: dict[str, Any] = dataclasses.field(default_factory=dict)
+    governance_summary: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
@@ -1129,6 +1144,15 @@ class MeshPeerClient:
     def get_mission_continuity(self, mission_id: str) -> dict:
         return self._request_json("GET", f"/mesh/missions/{mission_id}/continuity")
 
+    def export_mission_continuity_vessel(self, mission_id: str, payload: Optional[dict] = None) -> dict:
+        return self._request_json("POST", f"/mesh/missions/{mission_id}/continuity/export", payload=payload or {})
+
+    def verify_continuity_vessel(self, payload: dict) -> dict:
+        return self._request_json("POST", "/mesh/continuity/vessels/verify", payload=payload)
+
+    def plan_continuity_restore(self, payload: dict) -> dict:
+        return self._request_json("POST", "/mesh/continuity/vessels/restore-plan", payload=payload)
+
     def launch_mission(self, payload: dict) -> dict:
         return self._request_json("POST", "/mesh/missions/launch", payload=payload)
 
@@ -1384,6 +1408,22 @@ class MeshPeerClient:
 
     def request_approval(self, payload: dict) -> dict:
         return self._request_json("POST", "/mesh/approvals/request", payload=payload)
+
+    def list_treaties(self, *, limit: int = 25, status: str = "", treaty_type: str = "") -> dict:
+        return self._request_json(
+            "GET",
+            "/mesh/treaties",
+            params={"limit": limit, "status": status, "treaty_type": treaty_type},
+        )
+
+    def get_treaty(self, treaty_id: str) -> dict:
+        return self._request_json("GET", f"/mesh/treaties/{treaty_id}")
+
+    def propose_treaty(self, payload: dict) -> dict:
+        return self._request_json("POST", "/mesh/treaties/propose", payload=payload)
+
+    def audit_treaty_requirements(self, payload: Optional[dict] = None) -> dict:
+        return self._request_json("POST", "/mesh/treaties/audit", payload=payload or {})
 
     def resolve_approval(
         self,
@@ -1676,6 +1716,8 @@ class SovereignMesh:
             self,
             compact_text=_compact_text,
             loads_json=_loads_json,
+            normalize_treaty_document=normalize_treaty_document,
+            normalize_treaty_status=normalize_treaty_status,
             normalize_approval_status=_normalize_approval_status,
             normalize_notification_status=_normalize_notification_status,
             unique_tokens=_unique_tokens,
@@ -1998,6 +2040,22 @@ class SovereignMesh:
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     expires_at TEXT DEFAULT '',
                     resolved_at TEXT DEFAULT ''
+                );
+                CREATE TABLE IF NOT EXISTS mesh_treaties (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    summary TEXT DEFAULT '',
+                    treaty_type TEXT DEFAULT 'continuity',
+                    status TEXT DEFAULT 'draft',
+                    parties TEXT DEFAULT '[]',
+                    document TEXT DEFAULT '{}',
+                    metadata TEXT DEFAULT '{}',
+                    created_by_peer_id TEXT DEFAULT '',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT DEFAULT '',
+                    ratified_at TEXT DEFAULT '',
+                    suspended_at TEXT DEFAULT ''
                 );
                 CREATE TABLE IF NOT EXISTS mesh_workers (
                     id TEXT PRIMARY KEY,
@@ -2535,6 +2593,14 @@ class SovereignMesh:
                 port=int(parsed_base.port or 8421),
             ),
         )
+        habitat_roles = self._device_profile_habitat_roles(self.device_profile)
+        continuity_capabilities = self._continuity_capabilities(self.device_profile)
+        treaty_capabilities = {
+            "treaty_documents": True,
+            "continuity_validation": True,
+            "custody_review": bool(continuity_capabilities.get("custody_review")),
+        }
+        governance_summary = self.governance.treaty_posture(limit=5)
         card = OrganismCard(
             organism_id=self.node_id,
             node_id=self.node_id,
@@ -2574,6 +2640,10 @@ class SovereignMesh:
                 "secret_scopes_default": [],
             },
             device_profile=dict(self.device_profile),
+            habitat_roles=habitat_roles,
+            continuity_capabilities=continuity_capabilities,
+            treaty_capabilities=treaty_capabilities,
+            governance_summary=governance_summary,
         )
         workers = self.list_workers(limit=20)["workers"]
         return {
@@ -2588,6 +2658,17 @@ class SovereignMesh:
             },
             "device_profile": dict(self.device_profile),
             "sync_policy": self._device_profile_sync_policy(self.device_profile),
+            "habitat_roles": habitat_roles,
+            "continuity_capabilities": continuity_capabilities,
+            "treaty_capabilities": treaty_capabilities,
+            "governance_summary": governance_summary,
+            "continuity_overlay_fields": [
+                "continuity_class",
+                "lineage_ref",
+                "epoch_tolerance",
+                "dormancy_ok",
+                "treaty_requirements",
+            ],
             "organism_card": card.to_dict(),
             "reliability": self._local_reliability_summary(),
             "queue_metrics": self.queue_metrics(),
@@ -4175,6 +4256,39 @@ class SovereignMesh:
 
     def get_mission_continuity(self, mission_id: str) -> dict:
         return self.missions.get_mission_continuity(mission_id)
+
+    def export_mission_continuity_vessel(
+        self,
+        mission_id: str,
+        *,
+        dry_run: bool = True,
+        operator_id: str = "",
+        reason: str = "",
+    ) -> dict:
+        return self.missions.export_continuity_vessel(
+            mission_id,
+            dry_run=dry_run,
+            operator_id=operator_id,
+            reason=reason,
+        )
+
+    def verify_continuity_vessel(self, vessel_artifact_id: str) -> dict:
+        return self.missions.verify_continuity_vessel(vessel_artifact_id)
+
+    def plan_continuity_restore(
+        self,
+        vessel_artifact_id: str,
+        *,
+        target_peer_id: str = "",
+        operator_id: str = "",
+        reason: str = "",
+    ) -> dict:
+        return self.missions.plan_continuity_restore(
+            vessel_artifact_id,
+            target_peer_id=target_peer_id,
+            operator_id=operator_id,
+            reason=reason,
+        )
 
     def launch_mission(
         self,
@@ -6863,6 +6977,40 @@ class SovereignMesh:
             "relay_recommended": bool(normalized.get("sleep_capable") or normalized.get("intermittent")),
         }
 
+    def _device_profile_habitat_roles(self, profile: dict) -> list[str]:
+        normalized = _normalize_device_profile(profile)
+        device_class = str(normalized.get("device_class") or "full").strip().lower() or "full"
+        roles: list[str] = []
+        if normalized.get("compute_ready") and device_class in {"full", "light"}:
+            roles.append("foundry")
+        if normalized.get("artifact_mirror_capable") and device_class in {"full", "relay"}:
+            roles.append("archive")
+        if device_class == "relay":
+            roles.append("relay")
+        if normalized.get("sleep_capable") or normalized.get("intermittent"):
+            roles.append("vessel")
+        if normalized.get("approval_capable") and device_class in {"light", "micro"}:
+            roles.append("operator")
+            roles.append("witness")
+        elif normalized.get("approval_capable") and normalized.get("secure_secret_capable"):
+            roles.append("sanctuary")
+        return _unique_tokens(roles)
+
+    def _continuity_capabilities(self, profile: dict) -> dict:
+        normalized = _normalize_device_profile(profile)
+        sync_policy = self._device_profile_sync_policy(normalized)
+        habitat_roles = self._device_profile_habitat_roles(normalized)
+        return {
+            "mission_continuity": True,
+            "vessel_export": True,
+            "vessel_storage": bool(normalized.get("artifact_mirror_capable")),
+            "restore_dry_run": True,
+            "witness_artifacts": bool(normalized.get("approval_capable")),
+            "long_sleep": bool(sync_policy.get("sleep_capable") or sync_policy.get("intermittent")),
+            "custody_review": bool(normalized.get("approval_capable") and normalized.get("secure_secret_capable")),
+            "habitat_roles": habitat_roles,
+        }
+
     def _job_sync_resilience(
         self,
         job: dict,
@@ -7706,6 +7854,45 @@ class SovereignMesh:
             reason=reason,
             metadata=metadata,
         )
+
+    def propose_treaty(
+        self,
+        *,
+        treaty_id: str = "",
+        title: str,
+        summary: str = "",
+        treaty_type: str = "continuity",
+        status: str = "active",
+        parties: Optional[list[str]] = None,
+        document: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+        created_by_peer_id: str = "",
+        expires_at: str = "",
+    ) -> dict:
+        return self.governance.propose_treaty(
+            treaty_id=treaty_id,
+            title=title,
+            summary=summary,
+            treaty_type=treaty_type,
+            status=status,
+            parties=parties,
+            document=document,
+            metadata=metadata,
+            created_by_peer_id=created_by_peer_id,
+            expires_at=expires_at,
+        )
+
+    def list_treaties(self, *, limit: int = 25, status: str = "", treaty_type: str = "") -> dict:
+        return self.governance.list_treaties(limit=limit, status=status, treaty_type=treaty_type)
+
+    def get_treaty(self, treaty_id: str) -> dict:
+        return self.governance.get_treaty(treaty_id)
+
+    def validate_treaty_requirements(self, treaty_requirements: Optional[list[str]], *, operation: str = "") -> dict:
+        return self.governance.validate_treaty_requirements(treaty_requirements, operation=operation)
+
+    def audit_treaty_requirements(self, treaty_requirements: Optional[list[str]], *, operation: str = "") -> dict:
+        return self.governance.audit_treaty_requirements(treaty_requirements, operation=operation)
 
     def notify_peer(
         self,

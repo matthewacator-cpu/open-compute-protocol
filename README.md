@@ -10,8 +10,8 @@
 
 **A sovereign, local-first compute fabric for trusted devices.**
 
-[![Tests](https://img.shields.io/badge/tests-136%20passing-00FF88?style=flat-square&labelColor=06090F)](./tests/test_sovereign_mesh.py)
-[![Release](https://img.shields.io/badge/release-v0.1.1-F6C177?style=flat-square&labelColor=06090F)](./README.md#current-status)
+[![Tests](https://img.shields.io/badge/tests-147%20passing-00FF88?style=flat-square&labelColor=06090F)](./tests/test_sovereign_mesh.py)
+[![Release](https://img.shields.io/badge/release-v0.1.2-F6C177?style=flat-square&labelColor=06090F)](./README.md#current-status)
 [![Version](https://img.shields.io/badge/wire%20version-sovereign--mesh%2Fv1-00D4FF?style=flat-square&labelColor=06090F)](./docs/OCP_STATUS.md)
 [![Status](https://img.shields.io/badge/status-active%20development-C8A96E?style=flat-square&labelColor=06090F)](./docs/OCP_MASTER_PLAN.md)
 [![Protocol](https://img.shields.io/badge/protocol-OCP%20v0.1-7BC6FF?style=flat-square&labelColor=06090F)](./docs/OCP_STATUS.md)
@@ -127,7 +127,7 @@ Some devices are powerful. Some are private. Some are fragile. Some are approval
 | `runtime.py` | Standalone SQLite-backed substrate |
 | `server.py` | `/mesh/*` HTTP API and `/control` operator UI |
 | `docs/` | Protocol notes, status, and roadmap |
-| `tests/test_sovereign_mesh.py` | Regression suite — 136 tests |
+| `tests/test_sovereign_mesh.py` | Regression suite — 147 tests |
 
 **Key runtime concepts:**
 
@@ -249,18 +249,19 @@ python3 -m unittest tests.test_sovereign_mesh
 python3 server.py --help
 ```
 
-Current baseline: **136 tests passing.**
+Current baseline: **147 tests passing.**
 
 ---
 
 ## Current Status
 
-**Released in v0.1.1**
+**Released in v0.1.2**
 
 - protocol-kernel refactor that extracts real subsystem seams for protocol, state, scheduler, execution, artifacts, missions, helpers, and governance
 - `SovereignMesh` retained as the stable façade so routes, persistence, and current behavior stay compatible
 - execution boundary now owns runtime adapters, job submission and acceptance orchestration, and result packaging
-- broad regression suite remains green at 136 passing tests
+- broad regression suite remains green at 147 passing tests
+- continuity alpha now includes a 7026 vision document plus mission continuity vessel planning, verification, dry-run restore planning, `vessel`/`witness` artifact export, continuity metadata in manifests and mission state, continuity-aware scheduler explanations, additive treaty-aware continuity validation, and treaty posture surfaced in manifests and continuity summaries
 
 **Implemented in the current runtime**
 
@@ -272,7 +273,7 @@ Current baseline: **136 tests passing.**
 
 **Still evolving**
 
-- policy and treaty semantics
+- richer treaty and custody semantics beyond the current continuity-groundwork layer
 - continuity-vessel and richer artifact lineage work
 - broader multi-device orchestration UX
 
@@ -281,7 +282,7 @@ Current baseline: **136 tests passing.**
 ## Current Framing
 
 - `OCP v0.1` — protocol and spec draft
-- `v0.1.1` — current implementation release
+- `v0.1.2` — current implementation release
 - `Sovereign Mesh` — Python-first reference implementation
 - `sovereign-mesh/v1` — current wire version
 
@@ -304,6 +305,7 @@ OCP is already past "protocol sketch" stage. If it keeps going in this direction
 ## Related
 
 - [Status](./docs/OCP_STATUS.md)
+- [7026 Vision](./docs/OCP_7026_VISION.md)
 - [Quickstart](./docs/QUICKSTART.md)
 - [Master Plan](./docs/OCP_MASTER_PLAN.md)
 - [All Devices Plan](./docs/OCP_ALL_DEVICES_PLAN.md)

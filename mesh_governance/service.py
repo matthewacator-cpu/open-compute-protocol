@@ -4,7 +4,7 @@ import json
 import uuid
 from typing import Any, Optional
 
-from mesh_protocol import MeshPolicyError
+from mesh_protocol import MeshPolicyError, normalize_treaty_document, normalize_treaty_status
 
 
 class MeshGovernanceService:
@@ -16,6 +16,8 @@ class MeshGovernanceService:
         *,
         compact_text,
         loads_json,
+        normalize_treaty_document,
+        normalize_treaty_status,
         normalize_approval_status,
         normalize_notification_status,
         unique_tokens,
@@ -25,11 +27,211 @@ class MeshGovernanceService:
         self.mesh = mesh
         self._compact_text = compact_text
         self._loads_json = loads_json
+        self._normalize_treaty_document = normalize_treaty_document
+        self._normalize_treaty_status = normalize_treaty_status
         self._normalize_approval_status = normalize_approval_status
         self._normalize_notification_status = normalize_notification_status
         self._unique_tokens = unique_tokens
         self._utcnow = utcnow
         self._apply_approval_automation = apply_approval_automation
+
+    def propose_treaty(
+        self,
+        *,
+        treaty_id: str = "",
+        title: str,
+        summary: str = "",
+        treaty_type: str = "continuity",
+        status: str = "active",
+        parties: Optional[list[str]] = None,
+        document: Optional[dict] = None,
+        metadata: Optional[dict] = None,
+        created_by_peer_id: str = "",
+        expires_at: str = "",
+    ) -> dict:
+        title_token = str(title or "").strip()
+        if not title_token:
+            raise MeshPolicyError("treaty title is required")
+        treaty_token = str(treaty_id or "").strip() or str(uuid.uuid4())
+        normalized_document = self._normalize_treaty_document(
+            {
+                **dict(document or {}),
+                "treaty_type": treaty_type or dict(document or {}).get("treaty_type") or "continuity",
+                "parties": list(parties or []) or list(dict(document or {}).get("parties") or []),
+            }
+        )
+        status_token = self._normalize_treaty_status(status)
+        now = self._utcnow()
+        with self.mesh._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO mesh_treaties
+                (id, title, summary, treaty_type, status, parties, document, metadata, created_by_peer_id,
+                 created_at, updated_at, expires_at, ratified_at, suspended_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+                ON CONFLICT(id) DO UPDATE SET
+                    title=excluded.title,
+                    summary=excluded.summary,
+                    treaty_type=excluded.treaty_type,
+                    status=excluded.status,
+                    parties=excluded.parties,
+                    document=excluded.document,
+                    metadata=excluded.metadata,
+                    updated_at=excluded.updated_at,
+                    expires_at=excluded.expires_at,
+                    ratified_at=excluded.ratified_at
+                """,
+                (
+                    treaty_token,
+                    title_token,
+                    str(summary or "").strip(),
+                    str(normalized_document.get("treaty_type") or "continuity").strip().lower() or "continuity",
+                    status_token,
+                    json.dumps(self._unique_tokens(normalized_document.get("parties") or [])),
+                    json.dumps(normalized_document),
+                    json.dumps(dict(metadata or {})),
+                    str(created_by_peer_id or self.mesh.node_id).strip() or self.mesh.node_id,
+                    now,
+                    now,
+                    str(expires_at or "").strip(),
+                    now if status_token == "active" else "",
+                ),
+            )
+            row = conn.execute("SELECT * FROM mesh_treaties WHERE id=?", (treaty_token,)).fetchone()
+            conn.commit()
+        treaty = self.row_to_treaty(row)
+        self.mesh._record_event(
+            "mesh.treaty.proposed",
+            peer_id=self.mesh.node_id,
+            payload={
+                "treaty_id": treaty["id"],
+                "status": treaty["status"],
+                "treaty_type": treaty["treaty_type"],
+            },
+        )
+        return treaty
+
+    def list_treaties(self, *, limit: int = 25, status: str = "", treaty_type: str = "") -> dict:
+        status_token = self._normalize_treaty_status(status) if str(status or "").strip() else ""
+        query = ["SELECT * FROM mesh_treaties WHERE 1=1"]
+        args: list[Any] = []
+        if status_token:
+            query.append("AND status=?")
+            args.append(status_token)
+        if str(treaty_type or "").strip():
+            query.append("AND treaty_type=?")
+            args.append(str(treaty_type or "").strip().lower())
+        query.append("ORDER BY updated_at DESC, created_at DESC LIMIT ?")
+        args.append(max(1, int(limit or 25)))
+        with self.mesh._conn() as conn:
+            rows = conn.execute("\n".join(query), tuple(args)).fetchall()
+        treaties = [self.row_to_treaty(row) for row in rows]
+        return {"peer_id": self.mesh.node_id, "count": len(treaties), "treaties": treaties}
+
+    def get_treaty(self, treaty_id: str) -> dict:
+        with self.mesh._conn() as conn:
+            row = conn.execute("SELECT * FROM mesh_treaties WHERE id=?", ((treaty_id or "").strip(),)).fetchone()
+        if row is None:
+            raise MeshPolicyError("treaty not found")
+        return self.row_to_treaty(row)
+
+    def validate_treaty_requirements(
+        self,
+        treaty_requirements: Optional[list[str]],
+        *,
+        operation: str = "",
+    ) -> dict:
+        required = self._unique_tokens(treaty_requirements or [])
+        if not required:
+            return {
+                "satisfied": True,
+                "operation": str(operation or "").strip(),
+                "required": [],
+                "matched": [],
+                "missing": [],
+                "inactive": [],
+            }
+        matched: list[dict] = []
+        missing: list[str] = []
+        inactive: list[str] = []
+        for treaty_id in required:
+            try:
+                treaty = self.get_treaty(treaty_id)
+            except Exception:
+                treaty = None
+            if treaty is None:
+                missing.append(treaty_id)
+                continue
+            if treaty["status"] != "active":
+                inactive.append(treaty_id)
+            matched.append(treaty)
+        return {
+            "satisfied": not missing and not inactive,
+            "operation": str(operation or "").strip(),
+            "required": required,
+            "matched": matched,
+            "missing": missing,
+            "inactive": inactive,
+        }
+
+    def treaty_posture(self, *, limit: int = 10) -> dict:
+        with self.mesh._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT status, treaty_type, id, title, updated_at
+                FROM mesh_treaties
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT ?
+                """,
+                (max(1, int(limit or 10)),),
+            ).fetchall()
+            counts = conn.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM mesh_treaties
+                GROUP BY status
+                """
+            ).fetchall()
+        counts_by_status = {str(row["status"] or "draft"): int(row["count"] or 0) for row in counts}
+        active = [row for row in rows if self._normalize_treaty_status(row["status"]) == "active"]
+        recent = [
+            {
+                "id": row["id"],
+                "title": row["title"] or "",
+                "status": self._normalize_treaty_status(row["status"]),
+                "treaty_type": row["treaty_type"] or "continuity",
+                "updated_at": row["updated_at"],
+            }
+            for row in rows
+        ]
+        return {
+            "count": int(sum(counts_by_status.values())),
+            "counts_by_status": counts_by_status,
+            "active_treaty_ids": [str(row["id"] or "").strip() for row in active[:limit] if str(row["id"] or "").strip()],
+            "recent": recent,
+        }
+
+    def audit_treaty_requirements(
+        self,
+        treaty_requirements: Optional[list[str]],
+        *,
+        operation: str = "",
+    ) -> dict:
+        validation = self.validate_treaty_requirements(treaty_requirements, operation=operation)
+        posture = self.treaty_posture()
+        if validation["satisfied"]:
+            guidance = "Treaty requirements are satisfied for this operation."
+        elif validation["missing"]:
+            guidance = "One or more required treaties are missing and need to be proposed or synced."
+        else:
+            guidance = "One or more required treaties are present but not active."
+        return {
+            "status": "ok" if validation["satisfied"] else "attention_needed",
+            "operation": str(operation or "").strip(),
+            "validation": validation,
+            "posture": posture,
+            "guidance": guidance,
+        }
 
     def publish_notification(
         self,
@@ -439,4 +641,25 @@ class MeshGovernanceService:
             "updated_at": row["updated_at"],
             "expires_at": row["expires_at"] or "",
             "resolved_at": row["resolved_at"] or "",
+        }
+
+    def row_to_treaty(self, row) -> Optional[dict]:
+        if row is None:
+            return None
+        document = self._normalize_treaty_document(self._loads_json(row["document"], {}))
+        return {
+            "id": row["id"],
+            "title": row["title"] or "",
+            "summary": row["summary"] or "",
+            "treaty_type": row["treaty_type"] or document.get("treaty_type") or "continuity",
+            "status": self._normalize_treaty_status(row["status"]),
+            "parties": self._unique_tokens(self._loads_json(row["parties"], [])),
+            "document": document,
+            "metadata": self._loads_json(row["metadata"], {}),
+            "created_by_peer_id": row["created_by_peer_id"] or "",
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "expires_at": row["expires_at"] or "",
+            "ratified_at": row["ratified_at"] or "",
+            "suspended_at": row["suspended_at"] or "",
         }

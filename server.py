@@ -6481,6 +6481,78 @@ class OCPHandler(BaseHTTPRequestHandler):
         mission_id = path[len("/mesh/missions/"):-len("/continuity")].strip("/")
         self._send_json(self._mesh().get_mission_continuity(mission_id))
 
+    def _handle_mesh_mission_continuity_export(self, path: str, data):
+        mission_id = path[len("/mesh/missions/"):-len("/continuity/export")].strip("/")
+        raw_dry_run = data.get("dry_run", True)
+        dry_run = not (
+            isinstance(raw_dry_run, str)
+            and raw_dry_run.strip().lower() in {"0", "false", "no", "off"}
+        ) and bool(raw_dry_run)
+        self._send_json(
+            self._mesh().export_mission_continuity_vessel(
+                mission_id,
+                dry_run=dry_run,
+                operator_id=(data.get("operator_id") or "").strip(),
+                reason=(data.get("reason") or "").strip(),
+            )
+        )
+
+    def _handle_mesh_continuity_vessel_verify(self, data):
+        self._send_json(
+            self._mesh().verify_continuity_vessel(
+                (data.get("artifact_id") or data.get("vessel_artifact_id") or "").strip()
+            )
+        )
+
+    def _handle_mesh_continuity_restore_plan(self, data):
+        self._send_json(
+            self._mesh().plan_continuity_restore(
+                (data.get("artifact_id") or data.get("vessel_artifact_id") or "").strip(),
+                target_peer_id=(data.get("target_peer_id") or "").strip(),
+                operator_id=(data.get("operator_id") or "").strip(),
+                reason=(data.get("reason") or "").strip(),
+            )
+        )
+
+    def _handle_mesh_treaties(self, params):
+        self._send_json(
+            self._mesh().list_treaties(
+                limit=int(params.get("limit", ["25"])[0]),
+                status=params.get("status", [""])[0],
+                treaty_type=params.get("treaty_type", [""])[0],
+            )
+        )
+
+    def _handle_mesh_treaty_get(self, path: str):
+        self._send_json(self._mesh().get_treaty(path.split("/mesh/treaties/", 1)[1]))
+
+    def _handle_mesh_treaty_propose(self, data):
+        self._send_json(
+            {
+                "status": "ok",
+                "treaty": self._mesh().propose_treaty(
+                    treaty_id=(data.get("treaty_id") or "").strip(),
+                    title=(data.get("title") or "").strip(),
+                    summary=(data.get("summary") or "").strip(),
+                    treaty_type=(data.get("treaty_type") or "continuity").strip(),
+                    status=(data.get("status") or "active").strip(),
+                    parties=list(data.get("parties") or []),
+                    document=dict(data.get("document") or {}),
+                    metadata=dict(data.get("metadata") or {}),
+                    created_by_peer_id=(data.get("created_by_peer_id") or "").strip(),
+                    expires_at=(data.get("expires_at") or "").strip(),
+                )
+            }
+        )
+
+    def _handle_mesh_treaty_audit(self, data):
+        self._send_json(
+            self._mesh().audit_treaty_requirements(
+                list(data.get("treaty_requirements") or []),
+                operation=(data.get("operation") or "").strip(),
+            )
+        )
+
     def _handle_mesh_mission_get(self, path: str):
         self._send_json(self._mesh().get_mission(path.split("/mesh/missions/", 1)[1]))
 
@@ -7067,6 +7139,10 @@ class OCPHandler(BaseHTTPRequestHandler):
                 return self._handle_mesh_notifications(params)
             if path == "/mesh/approvals":
                 return self._handle_mesh_approvals(params)
+            if path == "/mesh/treaties":
+                return self._handle_mesh_treaties(params)
+            if path.startswith("/mesh/treaties/"):
+                return self._handle_mesh_treaty_get(path)
             if path == "/mesh/secrets":
                 return self._handle_mesh_secrets(params)
             if path == "/mesh/queue":
@@ -7138,6 +7214,12 @@ class OCPHandler(BaseHTTPRequestHandler):
                 return self._handle_mesh_mission_test_launch(data)
             if path == "/mesh/missions/test-mesh-launch":
                 return self._handle_mesh_mission_test_mesh_launch(data)
+            if path == "/mesh/continuity/vessels/verify":
+                return self._handle_mesh_continuity_vessel_verify(data)
+            if path == "/mesh/continuity/vessels/restore-plan":
+                return self._handle_mesh_continuity_restore_plan(data)
+            if path.startswith("/mesh/missions/") and path.endswith("/continuity/export"):
+                return self._handle_mesh_mission_continuity_export(path, data)
             if path.startswith("/mesh/missions/") and path.endswith("/cancel"):
                 return self._handle_mesh_mission_cancel(path, data)
             if path.startswith("/mesh/missions/") and path.endswith("/resume-from-checkpoint"):
@@ -7162,6 +7244,10 @@ class OCPHandler(BaseHTTPRequestHandler):
                 return self._handle_mesh_notification_ack(path, data)
             if path == "/mesh/approvals/request":
                 return self._handle_mesh_approval_request(data)
+            if path == "/mesh/treaties/propose":
+                return self._handle_mesh_treaty_propose(data)
+            if path == "/mesh/treaties/audit":
+                return self._handle_mesh_treaty_audit(data)
             if path.startswith("/mesh/approvals/") and path.endswith("/resolve"):
                 return self._handle_mesh_approval_resolve(path, data)
             if path == "/mesh/secrets/put":

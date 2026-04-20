@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import uuid
 from typing import Any, Optional
@@ -355,6 +356,8 @@ class MeshMissionService:
             "device_class": device_class,
             "execution_tier": str(normalized_profile.get("execution_tier") or "").strip(),
             "form_factor": str(normalized_profile.get("form_factor") or "").strip(),
+            "habitat_roles": list(self.mesh._device_profile_habitat_roles(normalized_profile)),
+            "continuity_capabilities": dict(self.mesh._continuity_capabilities(normalized_profile)),
             "connected": bool(connected),
             "current": bool(current),
             "sleep_capable": bool(sync_policy.get("sleep_capable")),
@@ -522,6 +525,10 @@ class MeshMissionService:
         )
         checkpoint_state = self.continuity_artifact_state(dict(mission.get("latest_checkpoint_ref") or {}), label="Latest Checkpoint")
         result_bundle_state = self.continuity_artifact_state(dict(mission.get("result_bundle_ref") or {}), label="Result Bundle")
+        treaty_audit = self.mesh.audit_treaty_requirements(
+            continuity.get("treaty_requirements") or [],
+            operation="mission_continuity",
+        )
         return {
             "mission_id": mission["id"],
             "title": mission.get("title") or "Mission",
@@ -555,9 +562,415 @@ class MeshMissionService:
                 "checkpoint": checkpoint_state,
                 "result_bundle": result_bundle_state,
             },
+            "treaty_validation": dict(treaty_audit.get("validation") or {}),
+            "governance": {
+                "treaty_requirements": list(dict(treaty_audit.get("validation") or {}).get("required") or []),
+                "treaty_audit": treaty_audit,
+            },
             "available_actions": self.mission_continuity_actions(mission),
             "mission": mission,
         }
+
+    def export_continuity_vessel(
+        self,
+        mission_id: str,
+        *,
+        dry_run: bool = True,
+        operator_id: str = "",
+        reason: str = "",
+    ) -> dict:
+        continuity_state = self.get_mission_continuity(mission_id)
+        mission = dict(continuity_state.get("mission") or {})
+        continuity = dict(mission.get("continuity") or {})
+        metadata = dict(mission.get("metadata") or {})
+        checkpoint_ref = dict(mission.get("latest_checkpoint_ref") or {})
+        result_ref = dict(mission.get("result_ref") or {})
+        result_bundle_ref = dict(mission.get("result_bundle_ref") or {})
+        lineage = dict(mission.get("lineage") or {})
+        child_jobs = [dict(item or {}) for item in list(mission.get("child_jobs") or [])]
+        cooperative_tasks = [dict(item or {}) for item in list(mission.get("cooperative_tasks") or [])]
+
+        warnings: list[str] = []
+        if not checkpoint_ref and not result_bundle_ref and not result_ref:
+            warnings.append("Mission has no checkpoint or result bundle yet, so continuity export is only partial.")
+        if not list(continuity_state.get("safe_devices") or []):
+            warnings.append("No trusted continuity-safe devices are currently visible.")
+
+        continuity_overlay = {}
+        for key, value in {
+            "lineage_ref": metadata.get("lineage_ref") or continuity.get("lineage_ref") or "",
+            "continuity_class": continuity.get("continuity_class") or metadata.get("continuity_class") or "",
+            "epoch_tolerance": continuity.get("epoch_tolerance") or metadata.get("epoch_tolerance") or "",
+            "dormancy_ok": bool(continuity.get("dormancy_ok") or metadata.get("dormancy_ok")),
+            "treaty_requirements": list(
+                continuity.get("treaty_requirements")
+                or metadata.get("treaty_requirements")
+                or []
+            ),
+        }.items():
+            if value in ("", None, False):
+                continue
+            if isinstance(value, list) and not value:
+                continue
+            continuity_overlay[key] = value
+        treaty_validation = self.mesh.validate_treaty_requirements(
+            continuity_overlay.get("treaty_requirements") or [],
+            operation="continuity_export",
+        )
+        if not treaty_validation["satisfied"]:
+            warnings.append("Treaty requirements are not fully satisfied for continuity export.")
+
+        vessel_payload = {
+            "kind": "ocp.continuity.vessel",
+            "schema_version": 1,
+            "created_at": self._utcnow(),
+            "dry_run": bool(dry_run),
+            "mission": {
+                "id": mission.get("id") or "",
+                "request_id": mission.get("request_id") or "",
+                "title": mission.get("title") or "",
+                "intent": mission.get("intent") or "",
+                "status": mission.get("status") or "planned",
+                "priority": mission.get("priority") or "normal",
+                "workload_class": mission.get("workload_class") or "default",
+            },
+            "continuity": {
+                "state": continuity_state.get("continuity_state") or "preparing",
+                "recoverable": bool(dict(continuity_state.get("recovery") or {}).get("recoverable")),
+                "checkpoint_ready": bool(dict(continuity_state.get("recovery") or {}).get("checkpoint_ready")),
+                "recommended_action": continuity_state.get("recommended_action") or "wait",
+                "preferred_target_device_classes": list(continuity_state.get("preferred_target_device_classes") or []),
+                "safe_devices": list(continuity_state.get("safe_devices") or []),
+                "overlay": continuity_overlay,
+            },
+            "artifacts": {
+                "checkpoint_ref": checkpoint_ref,
+                "result_ref": result_ref,
+                "result_bundle_ref": result_bundle_ref,
+            },
+            "lineage": lineage,
+            "policy": dict(mission.get("policy") or {}),
+            "governance": {
+                "treaty_requirements": list(treaty_validation.get("required") or []),
+                "treaty_validation": treaty_validation,
+            },
+            "child_jobs": [
+                {
+                    "id": item.get("id") or "",
+                    "kind": item.get("kind") or "",
+                    "status": item.get("status") or "",
+                    "target": item.get("target") or "",
+                    "latest_checkpoint_ref": dict(item.get("latest_checkpoint_ref") or {}),
+                    "result_ref": dict(item.get("result_ref") or {}),
+                    "result_bundle_ref": dict(item.get("result_bundle_ref") or {}),
+                }
+                for item in child_jobs
+            ],
+            "cooperative_tasks": [
+                {
+                    "id": item.get("id") or "",
+                    "state": item.get("state") or "",
+                    "shard_count": int(item.get("shard_count") or 0),
+                }
+                for item in cooperative_tasks
+            ],
+            "required_absent": {
+                "secret_material": [],
+                "approvals": [],
+            },
+            "operator_request": {
+                "operator_id": str(operator_id or "").strip(),
+                "reason": str(reason or "").strip(),
+            },
+            "warnings": warnings,
+        }
+        witness_payload = {
+            "kind": "ocp.continuity.witness",
+            "schema_version": 1,
+            "issued_at": self._utcnow(),
+            "event": "mission.continuity.export",
+            "mission_id": mission.get("id") or mission_id,
+            "continuity_state": continuity_state.get("continuity_state") or "preparing",
+            "dry_run": bool(dry_run),
+            "operator_id": str(operator_id or "").strip(),
+            "reason": str(reason or "").strip(),
+        }
+        response = {
+            "status": "planned" if dry_run else "exported",
+            "dry_run": bool(dry_run),
+            "mission_id": mission.get("id") or mission_id,
+            "artifact_kind": "vessel",
+            "continuity_state": continuity_state.get("continuity_state") or "preparing",
+            "warnings": warnings,
+            "treaty_validation": treaty_validation,
+            "vessel": vessel_payload,
+            "witness": witness_payload,
+            "vessel_ref": {},
+            "witness_ref": {},
+        }
+        if dry_run:
+            self.mesh._record_event(
+                "mesh.mission.continuity_export.planned",
+                peer_id=self.mesh.node_id,
+                request_id=mission.get("request_id") or "",
+                payload={
+                    "mission_id": mission.get("id") or mission_id,
+                    "checkpoint_ready": bool(dict(continuity_state.get("recovery") or {}).get("checkpoint_ready")),
+                    "warning_count": len(warnings),
+                },
+            )
+            return response
+        if not treaty_validation["satisfied"]:
+            self.mesh._record_event(
+                "mesh.mission.continuity_export.blocked",
+                peer_id=self.mesh.node_id,
+                request_id=mission.get("request_id") or "",
+                payload={
+                    "mission_id": mission.get("id") or mission_id,
+                    "missing_treaties": list(treaty_validation.get("missing") or []),
+                    "inactive_treaties": list(treaty_validation.get("inactive") or []),
+                },
+            )
+            raise self.mesh.MeshPolicyError("continuity export requires active treaties for all treaty requirements")
+
+        vessel_ref = self.mesh.publish_local_artifact(
+            vessel_payload,
+            media_type="application/vnd.ocp.continuity.vessel.v1+json",
+            policy=mission.get("policy") or {"classification": "trusted", "mode": "batch"},
+            metadata={
+                "artifact_kind": "vessel",
+                "artifact_type": "application/vnd.ocp.continuity.vessel.v1",
+                "mission_id": mission.get("id") or mission_id,
+                "continuity_state": continuity_state.get("continuity_state") or "preparing",
+                "checkpoint_artifact_id": checkpoint_ref.get("id") or "",
+                "result_bundle_artifact_id": result_bundle_ref.get("id") or "",
+                "result_artifact_id": result_ref.get("id") or "",
+            },
+        )
+        witness_payload["subject_artifact_id"] = vessel_ref.get("id") or ""
+        witness_payload["subject_digest"] = vessel_ref.get("digest") or ""
+        witness_ref = self.mesh.publish_local_artifact(
+            witness_payload,
+            media_type="application/vnd.ocp.continuity.witness.v1+json",
+            policy=mission.get("policy") or {"classification": "trusted", "mode": "batch"},
+            metadata={
+                "artifact_kind": "witness",
+                "artifact_type": "application/vnd.ocp.continuity.witness.v1",
+                "mission_id": mission.get("id") or mission_id,
+                "subject_artifact_id": vessel_ref.get("id") or "",
+                "subject_digest": vessel_ref.get("digest") or "",
+            },
+        )
+        self.mesh._record_event(
+            "mesh.mission.continuity_export.created",
+            peer_id=self.mesh.node_id,
+            request_id=mission.get("request_id") or "",
+            payload={
+                "mission_id": mission.get("id") or mission_id,
+                "vessel_artifact_id": vessel_ref.get("id") or "",
+                "witness_artifact_id": witness_ref.get("id") or "",
+            },
+        )
+        response["vessel_ref"] = vessel_ref
+        response["witness_ref"] = witness_ref
+        return response
+
+    def continuity_artifact_payload(self, artifact_id: str) -> tuple[dict, dict]:
+        artifact = self.mesh.get_artifact(artifact_id)
+        payload = json.loads(base64.b64decode(artifact["content_base64"]).decode("utf-8"))
+        return artifact, dict(payload or {})
+
+    def verify_continuity_vessel(self, vessel_artifact_id: str) -> dict:
+        vessel_artifact, vessel_payload = self.continuity_artifact_payload(vessel_artifact_id)
+        if str(vessel_artifact.get("artifact_kind") or "").strip().lower() != "vessel":
+            raise self.mesh.MeshArtifactAccessError("artifact is not a continuity vessel")
+
+        mission_data = dict(vessel_payload.get("mission") or {})
+        artifact_refs = dict(vessel_payload.get("artifacts") or {})
+        mission_id = str(mission_data.get("id") or "").strip()
+        governance = dict(vessel_payload.get("governance") or {})
+        treaty_requirements = self._unique_tokens(
+            governance.get("treaty_requirements")
+            or dict(vessel_payload.get("continuity") or {}).get("overlay", {}).get("treaty_requirements")
+            or []
+        )
+        treaty_validation = self.mesh.validate_treaty_requirements(
+            treaty_requirements,
+            operation="continuity_restore",
+        )
+
+        related_witnesses: list[dict] = []
+        listed = self.mesh.list_artifacts(limit=200, artifact_kind="witness")
+        for artifact in list(listed.get("artifacts") or []):
+            metadata = dict(artifact.get("metadata") or {})
+            if str(metadata.get("subject_artifact_id") or "").strip() != vessel_artifact_id:
+                continue
+            if mission_id and str(metadata.get("mission_id") or "").strip() != mission_id:
+                continue
+            related_witnesses.append(artifact)
+
+        availability: dict[str, dict] = {}
+        missing_refs: list[dict] = []
+        for key, ref in artifact_refs.items():
+            ref_dict = dict(ref or {})
+            if not ref_dict.get("id"):
+                availability[key] = {"required": False, "available": False, "artifact": {}}
+                continue
+            try:
+                artifact = self.mesh.get_artifact(ref_dict["id"], include_content=False)
+                available = True
+            except Exception:
+                artifact = dict(ref_dict)
+                available = False
+                missing_refs.append({"role": key, "artifact_id": ref_dict.get("id") or "", "digest": ref_dict.get("digest") or ""})
+            availability[key] = {
+                "required": True,
+                "available": available,
+                "artifact": artifact,
+            }
+
+        witness_records: list[dict] = []
+        subject_digest = str(vessel_artifact.get("digest") or "").strip()
+        for witness in related_witnesses:
+            try:
+                _, witness_payload = self.continuity_artifact_payload(witness["id"])
+            except Exception:
+                witness_payload = {}
+            witness_records.append(
+                {
+                    "artifact": witness,
+                    "payload": witness_payload,
+                    "subject_matches": str(witness_payload.get("subject_artifact_id") or "").strip() == vessel_artifact_id,
+                    "digest_matches": str(witness_payload.get("subject_digest") or "").strip() == subject_digest,
+                }
+            )
+
+        status = "verified"
+        warnings: list[str] = []
+        if not related_witnesses:
+            status = "attention_needed"
+            warnings.append("No witness artifact currently attests to this vessel.")
+        if missing_refs:
+            status = "attention_needed"
+            warnings.append("One or more continuity references are missing locally.")
+        if not treaty_validation["satisfied"]:
+            status = "attention_needed"
+            warnings.append("Treaty requirements are not currently satisfied for this continuity vessel.")
+        if not dict(vessel_payload.get("continuity") or {}).get("checkpoint_ready") and not artifact_refs.get("result_bundle_ref"):
+            warnings.append("Vessel has no checkpoint-ready continuity state or result bundle.")
+
+        result = {
+            "status": status,
+            "mission_id": mission_id,
+            "treaty_validation": treaty_validation,
+            "vessel": {
+                "artifact": vessel_artifact,
+                "payload": vessel_payload,
+            },
+            "witnesses": witness_records,
+            "artifact_availability": availability,
+            "missing_refs": missing_refs,
+            "warnings": warnings,
+        }
+        self.mesh._record_event(
+            "mesh.continuity.vessel.verified",
+            peer_id=self.mesh.node_id,
+            request_id=str(mission_data.get("request_id") or "").strip(),
+            payload={
+                "mission_id": mission_id,
+                "vessel_artifact_id": vessel_artifact_id,
+                "status": status,
+                "witness_count": len(related_witnesses),
+                "missing_ref_count": len(missing_refs),
+            },
+        )
+        return result
+
+    def plan_continuity_restore(
+        self,
+        vessel_artifact_id: str,
+        *,
+        target_peer_id: str = "",
+        operator_id: str = "",
+        reason: str = "",
+    ) -> dict:
+        verification = self.verify_continuity_vessel(vessel_artifact_id)
+        vessel_payload = dict(dict(verification.get("vessel") or {}).get("payload") or {})
+        continuity = dict(vessel_payload.get("continuity") or {})
+        safe_devices = [dict(item or {}) for item in list(continuity.get("safe_devices") or [])]
+        selected_target = {}
+        requested_target = str(target_peer_id or "").strip()
+        if requested_target:
+            selected_target = next((item for item in safe_devices if str(item.get("peer_id") or "").strip() == requested_target), {})
+        if not selected_target and safe_devices:
+            selected_target = next((item for item in safe_devices if item.get("connected")), safe_devices[0])
+
+        artifact_availability = dict(verification.get("artifact_availability") or {})
+        checkpoint_state = dict(artifact_availability.get("checkpoint_ref") or {})
+        result_bundle_state = dict(artifact_availability.get("result_bundle_ref") or {})
+        result_state = dict(artifact_availability.get("result_ref") or {})
+        treaty_validation = dict(verification.get("treaty_validation") or {})
+        recommended_action = str(continuity.get("recommended_action") or "wait").strip().lower() or "wait"
+        if recommended_action == "resume" and not bool(checkpoint_state.get("available")):
+            recommended_action = "restart" if not bool(result_bundle_state.get("available") or result_state.get("available")) else "review"
+
+        readiness = "ready"
+        blockers: list[str] = []
+        if verification.get("status") != "verified":
+            readiness = "attention_needed"
+        if recommended_action == "resume" and not bool(checkpoint_state.get("available")):
+            readiness = "blocked"
+            blockers.append("Checkpoint artifact required for resume is not available.")
+        if not treaty_validation.get("satisfied", True):
+            readiness = "blocked"
+            blockers.append("Treaty requirements are not currently satisfied for continuity restore.")
+        if treaty_validation.get("required") and not selected_target:
+            readiness = "blocked"
+            blockers.append("No continuity-safe target is currently available for treaty-bound restore.")
+        if treaty_validation.get("required") and selected_target and not bool(
+            dict(selected_target.get("continuity_capabilities") or {}).get("custody_review")
+        ):
+            readiness = "blocked"
+            blockers.append("Selected continuity target does not support custody review for treaty-bound restore.")
+        if not selected_target and safe_devices:
+            readiness = "attention_needed"
+            blockers.append("No continuity-safe target device could be selected.")
+
+        plan = {
+            "status": readiness,
+            "dry_run": True,
+            "mission_id": str(dict(vessel_payload.get("mission") or {}).get("id") or "").strip(),
+            "vessel_artifact_id": vessel_artifact_id,
+            "recommended_action": recommended_action,
+            "target": selected_target,
+            "safe_devices": safe_devices,
+            "preferred_target_device_classes": list(continuity.get("preferred_target_device_classes") or []),
+            "artifacts": {
+                "checkpoint": checkpoint_state,
+                "result_bundle": result_bundle_state,
+                "result": result_state,
+            },
+            "treaty_validation": treaty_validation,
+            "verification": verification,
+            "blockers": blockers,
+            "operator_request": {
+                "operator_id": str(operator_id or "").strip(),
+                "reason": str(reason or "").strip(),
+            },
+        }
+        self.mesh._record_event(
+            "mesh.continuity.restore_plan.created",
+            peer_id=self.mesh.node_id,
+            request_id=str(dict(vessel_payload.get("mission") or {}).get("request_id") or "").strip(),
+            payload={
+                "mission_id": plan["mission_id"],
+                "vessel_artifact_id": vessel_artifact_id,
+                "status": readiness,
+                "recommended_action": recommended_action,
+                "target_peer_id": str(selected_target.get("peer_id") or "").strip(),
+            },
+        )
+        return plan
 
     def launch_mission(
         self,

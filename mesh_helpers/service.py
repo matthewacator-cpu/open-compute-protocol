@@ -267,7 +267,7 @@ class MeshHelperService:
             trust = self._normalize_trust_tier(peer.get("trust_tier"))
             if trust in {"blocked", "public"}:
                 continue
-            score, reasons = self.mesh._peer_candidate_score(peer, synthetic_job)
+            score, reasons, _continuity_alignment = self.mesh._peer_candidate_score(peer, synthetic_job)
             if score <= -10000:
                 continue
             device_profile = dict(peer.get("device_profile") or {})

@@ -17,6 +17,7 @@ from .errors import (
     MeshReplayError,
     MeshSignatureError,
 )
+from .treaties import normalize_treaty_document, normalize_treaty_status
 
 __all__ = [
     "IMPLEMENTATION_NAME",
@@ -27,6 +28,8 @@ __all__ = [
     "MeshProtocolService",
     "MeshReplayError",
     "MeshSignatureError",
+    "normalize_treaty_document",
+    "normalize_treaty_status",
     "OCP_RESULT_ARTIFACT_TYPE",
     "OCP_RESULT_CONFIG_MEDIA_TYPE",
     "OCI_MANIFEST_MEDIA_TYPE",

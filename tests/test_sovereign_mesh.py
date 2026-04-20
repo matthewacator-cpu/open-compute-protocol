@@ -98,6 +98,9 @@ ProbeHandler._handle_mesh_peers_connect_all = server.OCPHandler._handle_mesh_pee
 ProbeHandler._handle_mesh_peers_sync = server.OCPHandler._handle_mesh_peers_sync
 ProbeHandler._handle_mesh_missions = server.OCPHandler._handle_mesh_missions
 ProbeHandler._handle_mesh_mission_continuity_get = server.OCPHandler._handle_mesh_mission_continuity_get
+ProbeHandler._handle_mesh_mission_continuity_export = server.OCPHandler._handle_mesh_mission_continuity_export
+ProbeHandler._handle_mesh_continuity_vessel_verify = server.OCPHandler._handle_mesh_continuity_vessel_verify
+ProbeHandler._handle_mesh_continuity_restore_plan = server.OCPHandler._handle_mesh_continuity_restore_plan
 ProbeHandler._handle_mesh_mission_get = server.OCPHandler._handle_mesh_mission_get
 ProbeHandler._handle_mesh_mission_launch = server.OCPHandler._handle_mesh_mission_launch
 ProbeHandler._handle_mesh_mission_test_launch = server.OCPHandler._handle_mesh_mission_test_launch
@@ -127,6 +130,10 @@ ProbeHandler._handle_mesh_notification_ack = server.OCPHandler._handle_mesh_noti
 ProbeHandler._handle_mesh_approvals = server.OCPHandler._handle_mesh_approvals
 ProbeHandler._handle_mesh_approval_request = server.OCPHandler._handle_mesh_approval_request
 ProbeHandler._handle_mesh_approval_resolve = server.OCPHandler._handle_mesh_approval_resolve
+ProbeHandler._handle_mesh_treaties = server.OCPHandler._handle_mesh_treaties
+ProbeHandler._handle_mesh_treaty_get = server.OCPHandler._handle_mesh_treaty_get
+ProbeHandler._handle_mesh_treaty_propose = server.OCPHandler._handle_mesh_treaty_propose
+ProbeHandler._handle_mesh_treaty_audit = server.OCPHandler._handle_mesh_treaty_audit
 ProbeHandler._handle_mesh_secrets = server.OCPHandler._handle_mesh_secrets
 ProbeHandler._handle_mesh_secret_put = server.OCPHandler._handle_mesh_secret_put
 ProbeHandler._handle_mesh_queue = server.OCPHandler._handle_mesh_queue
@@ -274,6 +281,19 @@ def make_mesh_http_server(mesh):
                             target_agent_id=params.get("target_agent_id", [""])[0],
                         )
                     )
+                    return
+                if path == "/mesh/treaties":
+                    limit = int(params.get("limit", ["25"])[0])
+                    self._send_json(
+                        mesh.list_treaties(
+                            limit=limit,
+                            status=params.get("status", [""])[0],
+                            treaty_type=params.get("treaty_type", [""])[0],
+                        )
+                    )
+                    return
+                if path.startswith("/mesh/treaties/"):
+                    self._send_json(mesh.get_treaty(path.split("/mesh/treaties/", 1)[1]))
                     return
                 if path == "/mesh/secrets":
                     limit = int(params.get("limit", ["25"])[0])
@@ -479,6 +499,33 @@ def make_mesh_http_server(mesh):
                         )
                     )
                     return
+                if path == "/mesh/treaties/propose":
+                    self._send_json(
+                        {
+                            "status": "ok",
+                            "treaty": mesh.propose_treaty(
+                                treaty_id=(payload.get("treaty_id") or "").strip(),
+                                title=(payload.get("title") or "").strip(),
+                                summary=(payload.get("summary") or "").strip(),
+                                treaty_type=(payload.get("treaty_type") or "continuity").strip(),
+                                status=(payload.get("status") or "active").strip(),
+                                parties=list(payload.get("parties") or []),
+                                document=dict(payload.get("document") or {}),
+                                metadata=dict(payload.get("metadata") or {}),
+                                created_by_peer_id=(payload.get("created_by_peer_id") or "").strip(),
+                                expires_at=(payload.get("expires_at") or "").strip(),
+                            )
+                        }
+                    )
+                    return
+                if path == "/mesh/treaties/audit":
+                    self._send_json(
+                        mesh.audit_treaty_requirements(
+                            list(payload.get("treaty_requirements") or []),
+                            operation=(payload.get("operation") or "").strip(),
+                        )
+                    )
+                    return
                 if path == "/mesh/jobs/submit":
                     self._send_json(mesh.accept_job_submission(payload))
                     return
@@ -518,6 +565,34 @@ def make_mesh_http_server(mesh):
                             trust_tier=(payload.get("trust_tier") or "trusted").strip(),
                             timeout=float(payload.get("timeout") or 3.0),
                             request_id=(payload.get("request_id") or "").strip() or None,
+                        )
+                    )
+                    return
+                if path.startswith("/mesh/missions/") and path.endswith("/continuity/export"):
+                    mission_id = path[len("/mesh/missions/"):-len("/continuity/export")].strip("/")
+                    self._send_json(
+                        mesh.export_mission_continuity_vessel(
+                            mission_id,
+                            dry_run=bool(payload.get("dry_run", True)),
+                            operator_id=(payload.get("operator_id") or "").strip(),
+                            reason=(payload.get("reason") or "").strip(),
+                        )
+                    )
+                    return
+                if path == "/mesh/continuity/vessels/verify":
+                    self._send_json(
+                        mesh.verify_continuity_vessel(
+                            (payload.get("artifact_id") or payload.get("vessel_artifact_id") or "").strip()
+                        )
+                    )
+                    return
+                if path == "/mesh/continuity/vessels/restore-plan":
+                    self._send_json(
+                        mesh.plan_continuity_restore(
+                            (payload.get("artifact_id") or payload.get("vessel_artifact_id") or "").strip(),
+                            target_peer_id=(payload.get("target_peer_id") or "").strip(),
+                            operator_id=(payload.get("operator_id") or "").strip(),
+                            reason=(payload.get("reason") or "").strip(),
                         )
                     )
                     return
@@ -3166,6 +3241,22 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(manifest["reliability"]["source"], "local_jobs")
         self.assertEqual(manifest["reliability"]["total"], 0)
 
+    def test_manifest_surfaces_treaty_capabilities_and_governance_summary(self):
+        alpha = self.make_stack("alpha")
+        alpha.mesh.propose_treaty(
+            treaty_id="treaty/manifest-v1",
+            title="Manifest Treaty",
+            document={"witness_required": True},
+        )
+
+        manifest = alpha.mesh.get_manifest()
+
+        self.assertTrue(manifest["treaty_capabilities"]["treaty_documents"])
+        self.assertTrue(manifest["treaty_capabilities"]["continuity_validation"])
+        self.assertEqual(manifest["governance_summary"]["count"], 1)
+        self.assertEqual(manifest["governance_summary"]["active_treaty_ids"], ["treaty/manifest-v1"])
+        self.assertEqual(manifest["organism_card"]["governance_summary"]["count"], 1)
+
     def test_manifest_stream_and_peer_sync_surface_device_profiles(self):
         alpha = self.make_stack(
             "alpha",
@@ -3209,6 +3300,10 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(peer["sync_policy"]["mode"], "intermittent")
         self.assertEqual(peer["heartbeat"]["sync_mode"], "intermittent")
         self.assertTrue(peer["sync_policy"]["sleep_capable"])
+        self.assertIn("operator", peer["habitat_roles"])
+        self.assertTrue(peer["continuity_capabilities"]["restore_dry_run"])
+        self.assertTrue(peer["continuity_capabilities"]["long_sleep"])
+        self.assertTrue(peer["treaty_capabilities"]["treaty_documents"])
 
     def test_scheduler_prefers_local_worker_when_available(self):
         alpha = self.make_stack("alpha")
@@ -3674,6 +3769,50 @@ class SovereignMeshTests(unittest.TestCase):
         listed = alpha.mesh.list_approvals(limit=10, target_peer_id="watch-node")
         self.assertEqual(listed["count"], 1)
 
+    def test_mesh_governance_service_supports_treaties_and_validation(self):
+        alpha = self.make_stack("alpha-governance-treaties")
+
+        treaty = alpha.mesh.governance.propose_treaty(
+            treaty_id="treaty/storage-v1",
+            title="Storage Continuity Treaty",
+            summary="Require witness-backed continuity custody.",
+            treaty_type="continuity",
+            parties=["alpha-node", "beta-node", "alpha-node"],
+            document={
+                "witness_required": True,
+                "artifact_export": "sealed",
+                "allowed_execution_classes": ["relay", "full", "relay"],
+            },
+        )
+
+        self.assertEqual(treaty["id"], "treaty/storage-v1")
+        self.assertEqual(treaty["status"], "active")
+        self.assertEqual(treaty["parties"], ["alpha-node", "beta-node"])
+        self.assertTrue(treaty["document"]["witness_required"])
+        self.assertEqual(treaty["document"]["allowed_execution_classes"], ["relay", "full"])
+
+        listed = alpha.mesh.governance.list_treaties(limit=10, status="active", treaty_type="continuity")
+        self.assertEqual(listed["count"], 1)
+        fetched = alpha.mesh.governance.get_treaty("treaty/storage-v1")
+        self.assertEqual(fetched["title"], "Storage Continuity Treaty")
+
+        validation = alpha.mesh.validate_treaty_requirements(
+            ["treaty/storage-v1", "treaty/missing-v1"],
+            operation="continuity_export",
+        )
+        self.assertFalse(validation["satisfied"])
+        self.assertEqual(validation["missing"], ["treaty/missing-v1"])
+        self.assertEqual(validation["matched"][0]["id"], "treaty/storage-v1")
+
+        audit = alpha.mesh.audit_treaty_requirements(
+            ["treaty/storage-v1", "treaty/missing-v1"],
+            operation="continuity_restore",
+        )
+        self.assertEqual(audit["status"], "attention_needed")
+        self.assertEqual(audit["validation"]["operation"], "continuity_restore")
+        self.assertEqual(audit["posture"]["active_treaty_ids"], ["treaty/storage-v1"])
+        self.assertIn("missing", audit["guidance"].lower())
+
     def test_remote_approval_request_and_resolution_over_http(self):
         alpha = self.make_stack("alpha")
         beta = self.make_stack(
@@ -3730,6 +3869,35 @@ class SovereignMeshTests(unittest.TestCase):
         resolution_notifications = beta.mesh.list_notifications(limit=10, target_peer_id="alpha-node")
         self.assertEqual(resolution_notifications["count"], 1)
         self.assertEqual(resolution_notifications["notifications"][0]["related_approval_id"], requested["approval"]["id"])
+
+    def test_treaty_endpoints_are_exposed_over_http(self):
+        alpha = self.make_stack("alpha-treaties-http")
+        alpha_client, _ = self.serve_mesh(alpha)
+
+        proposed = alpha_client.propose_treaty(
+            {
+                "treaty_id": "treaty/http-v1",
+                "title": "HTTP Continuity Treaty",
+                "summary": "Round-trip treaty APIs",
+                "document": {
+                    "witness_required": True,
+                    "artifact_export": "sealed",
+                    "allowed_execution_classes": ["full", "relay"],
+                },
+            }
+        )
+
+        self.assertEqual(proposed["status"], "ok")
+        self.assertEqual(proposed["treaty"]["id"], "treaty/http-v1")
+        listed = alpha_client.list_treaties(limit=10, status="active")
+        self.assertEqual(listed["count"], 1)
+        fetched = alpha_client.get_treaty("treaty/http-v1")
+        self.assertEqual(fetched["document"]["artifact_export"], "sealed")
+        audit = alpha_client.audit_treaty_requirements(
+            {"treaty_requirements": ["treaty/http-v1"], "operation": "continuity_export"}
+        )
+        self.assertEqual(audit["status"], "ok")
+        self.assertTrue(audit["validation"]["satisfied"])
 
     def test_scheduler_supports_required_device_class_and_artifact_mirror_policy(self):
         alpha = self.make_stack("alpha")
@@ -3869,6 +4037,143 @@ class SovereignMeshTests(unittest.TestCase):
         beta_candidate = next(candidate for candidate in strict["candidates"] if candidate["peer_id"] == "beta-node")
         self.assertIn("trust_floor_denied", beta_candidate["reasons"])
         self.assertEqual(strict["selected"]["peer_id"], "gamma-node")
+
+    def test_scheduler_continuity_durable_prefers_storage_capable_peer(self):
+        alpha = self.make_stack("alpha")
+        beta = self.make_stack(
+            "beta",
+            device_profile={
+                "device_class": "full",
+                "execution_tier": "standard",
+                "network_profile": "wired",
+                "artifact_mirror_capable": True,
+                "secure_secret_capable": True,
+                "form_factor": "server",
+            },
+        )
+        gamma = self.make_stack(
+            "gamma",
+            device_profile={
+                "device_class": "full",
+                "execution_tier": "standard",
+                "network_profile": "wired",
+                "artifact_mirror_capable": False,
+                "secure_secret_capable": False,
+                "form_factor": "server",
+            },
+        )
+        beta.mesh.register_worker(
+            worker_id="beta-worker",
+            agent_id=beta.agent_id,
+            capabilities=["worker-runtime", "shell"],
+            resources={"cpu": 2},
+        )
+        gamma.mesh.register_worker(
+            worker_id="gamma-worker",
+            agent_id=gamma.agent_id,
+            capabilities=["worker-runtime", "shell"],
+            resources={"cpu": 2},
+        )
+        _, beta_base_url = self.serve_mesh(beta)
+        _, gamma_base_url = self.serve_mesh(gamma)
+        alpha.mesh.connect_peer(base_url=beta_base_url, trust_tier="trusted")
+        alpha.mesh.connect_peer(base_url=gamma_base_url, trust_tier="trusted")
+        alpha.mesh.sync_peer("beta-node", limit=20, refresh_manifest=True)
+        alpha.mesh.sync_peer("gamma-node", limit=20, refresh_manifest=True)
+
+        decision = alpha.mesh.select_execution_target(
+            {
+                "kind": "shell.command",
+                "requirements": {"capabilities": ["shell"]},
+                "policy": {"classification": "trusted", "mode": "batch"},
+                "dispatch_mode": "queued",
+                "continuity": {
+                    "continuity_class": "durable",
+                    "lineage_ref": "lineage/test-alpha",
+                    "treaty_requirements": ["treaty/storage-v1"],
+                },
+                "payload": {"command": [sys.executable, "-c", "print('continuity durable')"]},
+                "artifact_inputs": [],
+            },
+            allow_local=False,
+        )
+
+        self.assertEqual(decision["status"], "placed")
+        self.assertEqual(decision["selected"]["peer_id"], "beta-node")
+        self.assertIn("continuity_storage_preferred", decision["selected"]["reasons"])
+        self.assertIn("lineage_ref_present", decision["selected"]["reasons"])
+        self.assertTrue(decision["selected"]["continuity_alignment"]["active"])
+
+    def test_scheduler_continuity_recovery_hint_prefers_requested_device_class(self):
+        alpha = self.make_stack("alpha")
+        beta = self.make_stack(
+            "beta",
+            device_profile={
+                "device_class": "light",
+                "execution_tier": "light",
+                "power_profile": "battery",
+                "network_profile": "intermittent",
+                "mobility": "mobile",
+                "form_factor": "phone",
+                "artifact_mirror_capable": True,
+            },
+        )
+        gamma = self.make_stack(
+            "gamma",
+            device_profile={
+                "device_class": "full",
+                "execution_tier": "standard",
+                "network_profile": "wired",
+                "form_factor": "server",
+            },
+        )
+        beta.mesh.register_worker(
+            worker_id="beta-worker",
+            agent_id=beta.agent_id,
+            capabilities=["worker-runtime", "shell"],
+            resources={"cpu": 1},
+        )
+        gamma.mesh.register_worker(
+            worker_id="gamma-worker",
+            agent_id=gamma.agent_id,
+            capabilities=["worker-runtime", "shell"],
+            resources={"cpu": 1},
+        )
+        _, beta_base_url = self.serve_mesh(beta)
+        _, gamma_base_url = self.serve_mesh(gamma)
+        alpha.mesh.connect_peer(base_url=beta_base_url, trust_tier="trusted")
+        alpha.mesh.connect_peer(base_url=gamma_base_url, trust_tier="trusted")
+        alpha.mesh.sync_peer("beta-node", limit=20, refresh_manifest=True)
+        alpha.mesh.sync_peer("gamma-node", limit=20, refresh_manifest=True)
+
+        decision = alpha.mesh.select_execution_target(
+            {
+                "kind": "shell.command",
+                "requirements": {"capabilities": ["shell"], "resources": {"cpu": 1}},
+                "policy": {"classification": "trusted", "mode": "batch"},
+                "dispatch_mode": "queued",
+                "payload": {"command": [sys.executable, "-c", "print('continuity class')"]},
+                "artifact_inputs": [],
+                "metadata": {
+                    "resumability": {"enabled": True},
+                    "checkpoint_policy": {"enabled": True, "on_retry": True},
+                    "recovery_hint": {
+                        "preferred_target_device_classes": ["light"],
+                    },
+                },
+            },
+            allow_local=False,
+        )
+
+        self.assertEqual(decision["status"], "placed")
+        beta_candidate = next(candidate for candidate in decision["candidates"] if candidate["peer_id"] == "beta-node")
+        self.assertIn("continuity_preferred_device_class", beta_candidate["reasons"])
+        self.assertEqual(
+            beta_candidate["continuity_alignment"]["preferred_target_device_classes"],
+            ["light"],
+        )
+        gamma_candidate = next(candidate for candidate in decision["candidates"] if candidate["peer_id"] == "gamma-node")
+        self.assertIn("continuity_device_class_miss", gamma_candidate["reasons"])
 
     def test_scheduler_local_backlog_limit_routes_to_remote_capacity(self):
         alpha = self.make_stack("alpha")
@@ -4325,6 +4630,11 @@ class SovereignMeshTests(unittest.TestCase):
 
     def test_server_mesh_manifest_handler_returns_manifest(self):
         alpha = self.make_stack("alpha")
+        alpha.mesh.propose_treaty(
+            treaty_id="treaty/server-v1",
+            title="Server Treaty",
+            document={"witness_required": True},
+        )
         server.server_context["mesh"] = alpha.mesh
         probe = ProbeHandler()
 
@@ -4336,6 +4646,11 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(probe.payload["protocol_release"], "0.1")
         self.assertEqual(probe.payload["implementation"]["name"], "Sovereign Mesh")
         self.assertEqual(probe.payload["organism_card"]["organism_id"], "alpha-node")
+        self.assertIn("foundry", probe.payload["habitat_roles"])
+        self.assertTrue(probe.payload["continuity_capabilities"]["mission_continuity"])
+        self.assertTrue(probe.payload["organism_card"]["continuity_capabilities"]["vessel_export"])
+        self.assertTrue(probe.payload["treaty_capabilities"]["treaty_documents"])
+        self.assertEqual(probe.payload["governance_summary"]["active_treaty_ids"], ["treaty/server-v1"])
 
     def test_server_control_page_handler_returns_mobile_html(self):
         alpha = self.make_stack("alpha")
@@ -4899,6 +5214,36 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(completed_mission["lineage"]["jobs"][0]["id"], child_job["id"])
         self.assertEqual(completed_mission["lineage"]["result_bundle_ref"]["id"], completed_mission["result_bundle_ref"]["id"])
 
+    def test_mission_continuity_overlay_fields_are_normalized_and_preserved(self):
+        beta = self.make_stack("beta")
+
+        mission = beta.mesh.launch_mission(
+            title="Continuity Overlay Mission",
+            intent="Carry explicit continuity metadata",
+            request_id="mission-overlay-1",
+            continuity={
+                "resumable": True,
+                "continuity_class": "durable",
+                "lineage_ref": "lineage/habitat-alpha",
+                "epoch_tolerance": "long_dormancy_ok",
+                "dormancy_ok": True,
+                "treaty_requirements": ["treaty/health-alliance-v3", "treaty/health-alliance-v3"],
+            },
+            job={
+                "kind": "agent.echo",
+                "policy": {"classification": "trusted", "mode": "batch"},
+                "payload": {"message": "overlay mission"},
+                "artifact_inputs": [],
+            },
+        )
+
+        stored = beta.mesh.get_mission(mission["id"])
+        self.assertEqual(stored["continuity"]["continuity_class"], "durable")
+        self.assertEqual(stored["continuity"]["lineage_ref"], "lineage/habitat-alpha")
+        self.assertEqual(stored["continuity"]["epoch_tolerance"], "long_dormancy_ok")
+        self.assertTrue(stored["continuity"]["dormancy_ok"])
+        self.assertEqual(stored["continuity"]["treaty_requirements"], ["treaty/health-alliance-v3"])
+
     def test_mission_reflects_checkpointed_child_state(self):
         beta = self.make_stack("beta")
         self._register_default_worker(beta)
@@ -4958,6 +5303,44 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertTrue(continuity["artifacts"]["checkpoint"]["available"])
         self.assertTrue(continuity["safe_devices"])
         self.assertEqual(continuity["available_actions"][0]["action"], "resume")
+        self.assertTrue(continuity["treaty_validation"]["satisfied"])
+
+    def test_mission_continuity_summary_surfaces_treaty_audit(self):
+        beta = self.make_stack("beta")
+        self._register_default_worker(beta)
+        mission = beta.mesh.launch_mission(
+            title="Treaty Audit Mission",
+            intent="Show treaty audit in continuity summary",
+            request_id="mission-continuity-treaty-audit",
+            continuity={"resumable": True, "checkpoint_strategy": "manual", "treaty_requirements": ["treaty/audit-v1"]},
+            job={
+                "kind": "python.inline",
+                "dispatch_mode": "queued",
+                "requirements": {"capabilities": ["python"]},
+                "policy": {"classification": "trusted", "mode": "batch"},
+                "payload": {"code": "print('treaty audit mission')"},
+                "artifact_inputs": [],
+                "metadata": {
+                    "retry_policy": {"max_attempts": 1},
+                    "resumability": {"enabled": True},
+                    "checkpoint_policy": {"enabled": True, "mode": "manual", "on_retry": False},
+                },
+            },
+        )
+        claimed = beta.mesh.claim_next_job("beta-worker", job_id=mission["child_job_ids"][0], ttl_seconds=120)
+        beta.mesh.fail_job_attempt(
+            claimed["attempt"]["id"],
+            error="treaty audit checkpoint failure",
+            retryable=False,
+            metadata={"checkpoint": {"cursor": 31, "phase": "saved"}},
+        )
+
+        continuity = beta.mesh.get_mission_continuity(mission["id"])
+
+        self.assertFalse(continuity["treaty_validation"]["satisfied"])
+        self.assertEqual(continuity["treaty_validation"]["missing"], ["treaty/audit-v1"])
+        self.assertEqual(continuity["governance"]["treaty_requirements"], ["treaty/audit-v1"])
+        self.assertEqual(continuity["governance"]["treaty_audit"]["status"], "attention_needed")
 
     def test_mesh_exposes_mission_service_for_continuity_queries(self):
         beta = self.make_stack("beta")
@@ -4969,6 +5352,187 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(continuity["mission_id"], mission["id"])
         self.assertEqual(continuity["continuity_state"], "ready_to_continue")
         self.assertEqual(continuity["recommended_action"], "resume")
+
+    def test_mission_service_can_plan_and_export_continuity_vessel(self):
+        beta = self.make_stack("beta")
+        state = self._checkpointed_mission(beta, request_id="mission-vessel-export")
+        mission = state["mission"]
+
+        planned = beta.mesh.missions.export_continuity_vessel(
+            mission["id"],
+            dry_run=True,
+            operator_id="operator-vessel",
+            reason="plan continuity export",
+        )
+        self.assertEqual(planned["status"], "planned")
+        self.assertTrue(planned["dry_run"])
+        self.assertEqual(planned["mission_id"], mission["id"])
+        self.assertEqual(planned["artifact_kind"], "vessel")
+        self.assertTrue(planned["vessel"]["continuity"]["checkpoint_ready"])
+        self.assertFalse(planned["vessel_ref"])
+        self.assertFalse(planned["witness_ref"])
+
+        exported = beta.mesh.missions.export_continuity_vessel(
+            mission["id"],
+            dry_run=False,
+            operator_id="operator-vessel",
+            reason="seal continuity export",
+        )
+        self.assertEqual(exported["status"], "exported")
+        self.assertTrue(exported["vessel_ref"]["id"])
+        self.assertTrue(exported["witness_ref"]["id"])
+
+        vessel_artifact = beta.mesh.get_artifact(exported["vessel_ref"]["id"])
+        vessel_payload = json.loads(base64.b64decode(vessel_artifact["content_base64"]).decode("utf-8"))
+        self.assertEqual(vessel_artifact["artifact_kind"], "vessel")
+        self.assertEqual(vessel_payload["mission"]["id"], mission["id"])
+
+        witness_artifact = beta.mesh.get_artifact(exported["witness_ref"]["id"])
+        witness_payload = json.loads(base64.b64decode(witness_artifact["content_base64"]).decode("utf-8"))
+        self.assertEqual(witness_artifact["artifact_kind"], "witness")
+        self.assertEqual(witness_payload["subject_artifact_id"], exported["vessel_ref"]["id"])
+
+    def test_mission_service_can_verify_vessel_and_plan_restore(self):
+        beta = self.make_stack("beta")
+        state = self._checkpointed_mission(beta, request_id="mission-vessel-verify")
+        mission = state["mission"]
+        exported = beta.mesh.missions.export_continuity_vessel(
+            mission["id"],
+            dry_run=False,
+            operator_id="operator-verify",
+            reason="seal for verification",
+        )
+
+        verified = beta.mesh.missions.verify_continuity_vessel(exported["vessel_ref"]["id"])
+        self.assertEqual(verified["status"], "verified")
+        self.assertEqual(verified["mission_id"], mission["id"])
+        self.assertTrue(verified["witnesses"])
+        self.assertTrue(verified["artifact_availability"]["checkpoint_ref"]["available"])
+
+        restore_plan = beta.mesh.missions.plan_continuity_restore(
+            exported["vessel_ref"]["id"],
+            operator_id="operator-restore-plan",
+            reason="dry-run restore",
+        )
+        self.assertEqual(restore_plan["status"], "ready")
+        self.assertTrue(restore_plan["dry_run"])
+        self.assertEqual(restore_plan["mission_id"], mission["id"])
+        self.assertEqual(restore_plan["recommended_action"], "resume")
+        self.assertTrue(restore_plan["artifacts"]["checkpoint"]["available"])
+
+    def test_continuity_treaty_validation_surfaces_in_export_verify_and_restore(self):
+        beta = self.make_stack("beta")
+        self._register_default_worker(beta)
+        mission = beta.mesh.launch_mission(
+            title="Treaty Continuity Mission",
+            intent="Test treaty-aware continuity export",
+            request_id="mission-vessel-treaty",
+            continuity={
+                "resumable": True,
+                "checkpoint_strategy": "manual",
+                "treaty_requirements": ["treaty/storage-v1"],
+            },
+            job={
+                "kind": "python.inline",
+                "dispatch_mode": "queued",
+                "requirements": {"capabilities": ["python"]},
+                "policy": {"classification": "trusted", "mode": "batch"},
+                "payload": {"code": "print('treaty continuity mission')"},
+                "artifact_inputs": [],
+                "metadata": {
+                    "retry_policy": {"max_attempts": 1},
+                    "resumability": {"enabled": True},
+                    "checkpoint_policy": {"enabled": True, "mode": "manual", "on_retry": False},
+                },
+            },
+        )
+        claimed = beta.mesh.claim_next_job("beta-worker", job_id=mission["child_job_ids"][0], ttl_seconds=120)
+        beta.mesh.fail_job_attempt(
+            claimed["attempt"]["id"],
+            error="mission treaty checkpoint failure",
+            retryable=False,
+            metadata={"checkpoint": {"cursor": 21, "phase": "saved"}},
+        )
+
+        planned = beta.mesh.missions.export_continuity_vessel(mission["id"], dry_run=True)
+        self.assertFalse(planned["treaty_validation"]["satisfied"])
+        self.assertEqual(planned["treaty_validation"]["missing"], ["treaty/storage-v1"])
+
+        with self.assertRaises(MeshPolicyError):
+            beta.mesh.missions.export_continuity_vessel(mission["id"], dry_run=False)
+
+        beta.mesh.propose_treaty(
+            treaty_id="treaty/storage-v1",
+            title="Storage Continuity Treaty",
+            document={"witness_required": True, "artifact_export": "sealed"},
+        )
+        exported = beta.mesh.missions.export_continuity_vessel(mission["id"], dry_run=False)
+
+        vessel_artifact = beta.mesh.get_artifact(exported["vessel_ref"]["id"])
+        vessel_payload = json.loads(base64.b64decode(vessel_artifact["content_base64"]).decode("utf-8"))
+        self.assertEqual(vessel_payload["governance"]["treaty_requirements"], ["treaty/storage-v1"])
+        self.assertTrue(vessel_payload["governance"]["treaty_validation"]["satisfied"])
+
+        verified = beta.mesh.missions.verify_continuity_vessel(exported["vessel_ref"]["id"])
+        self.assertEqual(verified["status"], "verified")
+        self.assertTrue(verified["treaty_validation"]["satisfied"])
+
+        restore_plan = beta.mesh.missions.plan_continuity_restore(exported["vessel_ref"]["id"])
+        self.assertEqual(restore_plan["status"], "ready")
+        self.assertTrue(restore_plan["treaty_validation"]["satisfied"])
+
+    def test_treaty_bound_restore_requires_custody_review_capable_target(self):
+        beta = self.make_stack(
+            "beta-light",
+            device_profile={
+                "device_class": "full",
+                "execution_tier": "standard",
+                "network_profile": "broadband",
+                "approval_capable": True,
+                "secure_secret_capable": False,
+            },
+        )
+        self._register_default_worker(beta, worker_id="beta-light-worker")
+        mission = beta.mesh.launch_mission(
+            title="Treaty Restore Mission",
+            intent="Block restore on non-custody-capable target",
+            request_id="mission-vessel-treaty-custody",
+            continuity={
+                "resumable": True,
+                "checkpoint_strategy": "manual",
+                "treaty_requirements": ["treaty/custody-v1"],
+            },
+            job={
+                "kind": "python.inline",
+                "dispatch_mode": "queued",
+                "requirements": {"capabilities": ["python"]},
+                "policy": {"classification": "trusted", "mode": "batch"},
+                "payload": {"code": "print('treaty custody mission')"},
+                "artifact_inputs": [],
+                "metadata": {
+                    "retry_policy": {"max_attempts": 1},
+                    "resumability": {"enabled": True},
+                    "checkpoint_policy": {"enabled": True, "mode": "manual", "on_retry": False},
+                },
+            },
+        )
+        claimed = beta.mesh.claim_next_job("beta-light-worker", job_id=mission["child_job_ids"][0], ttl_seconds=120)
+        beta.mesh.fail_job_attempt(
+            claimed["attempt"]["id"],
+            error="mission custody checkpoint failure",
+            retryable=False,
+            metadata={"checkpoint": {"cursor": 22, "phase": "saved"}},
+        )
+        beta.mesh.propose_treaty(
+            treaty_id="treaty/custody-v1",
+            title="Custody Continuity Treaty",
+            document={"witness_required": True, "artifact_export": "sealed"},
+        )
+        exported = beta.mesh.missions.export_continuity_vessel(mission["id"], dry_run=False)
+
+        restore_plan = beta.mesh.missions.plan_continuity_restore(exported["vessel_ref"]["id"])
+        self.assertEqual(restore_plan["status"], "blocked")
+        self.assertTrue(any("custody review" in blocker.lower() for blocker in restore_plan["blockers"]))
 
     def test_mission_resume_latest_recovers_checkpointed_child_job(self):
         beta = self.make_stack("beta")
@@ -5155,6 +5719,30 @@ class SovereignMeshTests(unittest.TestCase):
         continuity = alpha_client.get_mission_continuity(mission_id)
         self.assertEqual(continuity["mission_id"], mission_id)
         self.assertTrue(continuity["available_actions"])
+        export_plan = alpha_client.export_mission_continuity_vessel(
+            mission_id,
+            {"dry_run": True, "operator_id": "operator-http", "reason": "http export plan"},
+        )
+        self.assertEqual(export_plan["status"], "planned")
+        self.assertTrue(export_plan["dry_run"])
+        self.assertEqual(export_plan["artifact_kind"], "vessel")
+        self.assertEqual(export_plan["mission_id"], mission_id)
+        exported = alpha_client.export_mission_continuity_vessel(
+            mission_id,
+            {"dry_run": False, "operator_id": "operator-http", "reason": "http seal export"},
+        )
+        self.assertEqual(exported["status"], "exported")
+        verified = alpha_client.verify_continuity_vessel({"artifact_id": exported["vessel_ref"]["id"]})
+        self.assertEqual(verified["status"], "verified")
+        restore_plan = alpha_client.plan_continuity_restore(
+            {
+                "artifact_id": exported["vessel_ref"]["id"],
+                "operator_id": "operator-http",
+                "reason": "http restore plan",
+            }
+        )
+        self.assertEqual(restore_plan["status"], "ready")
+        self.assertEqual(restore_plan["mission_id"], mission_id)
 
         cancelled = alpha_client.cancel_mission(mission_id, reason="http cancel")
         self.assertEqual(cancelled["mission"]["id"], mission_id)

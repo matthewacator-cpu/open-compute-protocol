@@ -156,6 +156,10 @@ class MeshStateService:
         }
         device_profile = self.peer_device_profile({"metadata": metadata, "card": card})
         sync_policy = dict(metadata.get("remote_sync_policy") or self.mesh._device_profile_sync_policy(device_profile))
+        habitat_roles = list(card.get("habitat_roles") or self.mesh._device_profile_habitat_roles(device_profile))
+        continuity_capabilities = dict(card.get("continuity_capabilities") or self.mesh._continuity_capabilities(device_profile))
+        treaty_capabilities = dict(card.get("treaty_capabilities") or {})
+        governance_summary = dict(card.get("governance_summary") or {})
         return {
             "peer_id": row["peer_id"],
             "organism_id": row["peer_id"],
@@ -173,6 +177,10 @@ class MeshStateService:
             "card": card,
             "device_profile": device_profile,
             "sync_policy": sync_policy,
+            "habitat_roles": habitat_roles,
+            "continuity_capabilities": continuity_capabilities,
+            "treaty_capabilities": treaty_capabilities,
+            "governance_summary": governance_summary,
             "metadata": metadata,
             "reliability": self.mesh._peer_reliability_summary(peer_stub),
             "load": self.mesh._peer_load_summary(peer_stub),
