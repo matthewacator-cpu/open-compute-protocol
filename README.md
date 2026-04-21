@@ -10,8 +10,8 @@
 
 **A sovereign, local-first compute fabric for trusted devices.**
 
-[![Tests](https://img.shields.io/badge/tests-154%20passing-00FF88?style=flat-square&labelColor=06090F)](./tests/test_sovereign_mesh.py)
-[![Release](https://img.shields.io/badge/release-v0.1.2-F6C177?style=flat-square&labelColor=06090F)](./README.md#current-status)
+[![Tests](https://img.shields.io/badge/tests-156%20passing-00FF88?style=flat-square&labelColor=06090F)](./tests/test_sovereign_mesh.py)
+[![Release](https://img.shields.io/badge/release-v0.1.3-F6C177?style=flat-square&labelColor=06090F)](./README.md#current-status)
 [![Version](https://img.shields.io/badge/wire%20version-sovereign--mesh%2Fv1-00D4FF?style=flat-square&labelColor=06090F)](./docs/OCP_STATUS.md)
 [![Status](https://img.shields.io/badge/status-active%20development-C8A96E?style=flat-square&labelColor=06090F)](./docs/OCP_MASTER_PLAN.md)
 [![Protocol](https://img.shields.io/badge/protocol-OCP%20v0.1-7BC6FF?style=flat-square&labelColor=06090F)](./docs/OCP_STATUS.md)
@@ -126,9 +126,10 @@ Some devices are powerful. Some are private. Some are fragile. Some are approval
 | `mesh_helpers/` | Helper lifecycle, offload preferences, autonomous helper evaluation |
 | `mesh_governance/` | Notifications, approvals, and governance/policy helpers |
 | `runtime.py` | Standalone SQLite-backed substrate |
-| `server.py` | `/mesh/*` HTTP API and `/control` operator UI |
+| `server.py` | `/mesh/*` HTTP API, unified app shell, and operator UI routes |
+| `server_app.py` | Installable app shell that unifies setup, control, and protocol inspection |
 | `docs/` | Protocol notes, status, and roadmap |
-| `tests/test_sovereign_mesh.py` | Regression suite — 154 tests |
+| `tests/test_sovereign_mesh.py` | Regression suite — 156 tests |
 
 **Key runtime concepts:**
 
@@ -158,7 +159,7 @@ cd open-compute-protocol
 python3 scripts/start_ocp_easy.py
 ```
 
-Then open the easy setup page:
+Then open the OCP app:
 
 ```text
 http://127.0.0.1:8421/
@@ -198,11 +199,17 @@ For a fuller walkthrough, see [docs/QUICKSTART.md](./docs/QUICKSTART.md).
 
 ---
 
-## Operator Control Deck
+## OCP App
 
-OCP ships a built-in easy setup surface at `GET /` and an advanced control surface at `GET /control`.
+OCP ships a built-in one-app surface at `GET /` and `GET /app`. It is designed for phone browsers and can be added to the home screen as a local-first operator app.
 
-The easy page is meant for the common human flow: open OCP on two or more machines, press `Connect Everything`, then press `Test Whole Mesh`.
+Inside the app:
+
+- `Setup` embeds the easy setup flow from `GET /easy`
+- `Control` embeds the advanced control deck from `GET /control`
+- `Protocol` links the live manifest, device profile, and HTTP contract from `/mesh/*`
+
+The setup module is meant for the common human flow: open OCP on two or more machines, press `Connect Everything`, then press `Test Whole Mesh`.
 It now also supports:
 
 - `Copy My Easy Link` for manual fallback
@@ -211,7 +218,7 @@ It now also supports:
 - one-button cooperative verification across the whole current mesh with `Test Whole Mesh`
 - an auto-open starter script at `python3 scripts/start_ocp_easy.py`
 
-The advanced deck is phone-friendly, so your phone can act as a real operator console for the mesh. From there you can inspect and act on:
+The control module is phone-friendly, so your phone can act as a real operator console for the mesh. From there you can inspect and act on:
 
 - Peer and helper state
 - Queue and recovery status
@@ -252,27 +259,28 @@ python3 -m unittest tests.test_sovereign_mesh
 python3 server.py --help
 ```
 
-Current baseline: **154 tests passing.**
+Current baseline: **156 tests passing.**
 
 ---
 
 ## Current Status
 
-**Released in v0.1.2**
+**Released in v0.1.3**
 
 - protocol-kernel refactor that extracts real subsystem seams for protocol, state, scheduler, execution, artifacts, missions, helpers, and governance
 - `SovereignMesh` retained as the stable façade so routes, persistence, and current behavior stay compatible
 - execution boundary now owns runtime adapters, job submission and acceptance orchestration, and result packaging
-- broad regression suite remains green at 154 passing tests
+- broad regression suite remains green at 156 passing tests
 - continuity alpha now includes a 7026 vision document plus mission continuity vessel planning, verification, dry-run restore planning, `vessel`/`witness` artifact export, continuity metadata in manifests and mission state, continuity-aware scheduler explanations, additive treaty-aware continuity validation, and treaty posture surfaced in manifests and continuity summaries
 
-**Current main after v0.1.2**
+**Also included in v0.1.3**
 
 - peer and discovery projections now expose treaty compatibility and custody-readiness hints
 - connect, sync, and handshake flows return plain-language `operator_summary` and `recommended_action` fields
 - peer lifecycle events and control-stream payloads carry compact treaty advisory state for live operator surfaces
 - mission continuity now recommends treaty/custody-capable restore targets when available
-- easy setup and the advanced control deck surface treaty posture without requiring raw JSON inspection
+- unified app shell at `/` and `/app` brings setup, control, and protocol inspection into one phone-friendly surface
+- easy setup and the advanced control deck still surface treaty posture without requiring raw JSON inspection
 - server internals now have grouped route modules plus a `/mesh/contract` snapshot with reusable protocol schemas and lightweight ingress validation for the live HTTP surface
 
 **Implemented in the current runtime**
@@ -281,7 +289,7 @@ Current baseline: **154 tests passing.**
 - peer identity, manifests, sync, and discovery
 - queued jobs, missions, cooperative tasks, and recovery controls
 - helper enlistment, mesh pressure, and operator approvals
-- built-in `/control` operator UI
+- built-in `/` app shell with `/easy` setup and `/control` operator modules
 - treaty-aware continuity advisories across peer cards, mission summaries, connect/sync responses, and live streams
 - code-owned `/mesh/contract` route map, schema registry, and validation helpers for protocol and conformance work
 
@@ -296,7 +304,7 @@ Current baseline: **154 tests passing.**
 ## Current Framing
 
 - `OCP v0.1` — protocol and spec draft
-- `v0.1.2` — current implementation release
+- `v0.1.3` — current implementation release
 - `Sovereign Mesh` — Python-first reference implementation
 - `sovereign-mesh/v1` — current wire version
 

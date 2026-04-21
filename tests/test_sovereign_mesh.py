@@ -22,6 +22,7 @@ if root_str not in sys.path:
     sys.path.insert(0, root_str)
 
 import server
+import server_app
 import server_artifacts
 import server_connect
 import server_control
@@ -91,10 +92,17 @@ class ProbeHandler:
         self.code = code
         self.content_type = "text/html; charset=utf-8"
 
+    def _send_manifest_json(self, data, code=200):
+        self.payload = data
+        self.code = code
+        self.content_type = "application/manifest+json"
+
 
 ProbeHandler._mesh = server.OCPHandler._mesh
 ProbeHandler._dispatch_get_request = server.OCPHandler._dispatch_get_request
 ProbeHandler._dispatch_post_request = server.OCPHandler._dispatch_post_request
+ProbeHandler._handle_app_page = server.OCPHandler._handle_app_page
+ProbeHandler._handle_app_manifest = server.OCPHandler._handle_app_manifest
 ProbeHandler._handle_control_page = server.OCPHandler._handle_control_page
 ProbeHandler._handle_easy_page = server.OCPHandler._handle_easy_page
 ProbeHandler._handle_mesh_contract = server.OCPHandler._handle_mesh_contract
@@ -195,7 +203,13 @@ def make_mesh_http_server(mesh):
             path = parsed.path
             params = parse_qs(parsed.query)
             try:
-                if path in {"/", "/easy"}:
+                if path in {"/", "/app"}:
+                    self._send_html(server.build_app_page(mesh))
+                    return
+                if path == "/app.webmanifest":
+                    self._send_json(server.build_app_manifest(mesh))
+                    return
+                if path == "/easy":
                     self._send_html(server.build_easy_page(mesh))
                     return
                 if path in {"/control", "/control/mobile"}:
@@ -4796,6 +4810,33 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("/mesh/control/stream", probe.payload)
         self.assertIn("/mesh/notifications", probe.payload)
 
+    def test_server_app_page_handler_returns_unified_phone_shell(self):
+        alpha = self.make_stack("alpha")
+        server.server_context["mesh"] = alpha.mesh
+        probe = ProbeHandler()
+
+        probe._handle_app_page()
+
+        self.assertEqual(probe.code, 200)
+        self.assertEqual(probe.content_type, "text/html; charset=utf-8")
+        self.assertIn("OCP App", probe.payload)
+        self.assertIn("One app for the mesh.", probe.payload)
+        self.assertIn("OCP Easy Setup", probe.payload)
+        self.assertIn("OCP Control Deck", probe.payload)
+        self.assertIn("/easy", probe.payload)
+        self.assertIn("/control", probe.payload)
+        self.assertIn("/mesh/contract", probe.payload)
+        self.assertIn("/app.webmanifest", probe.payload)
+
+        manifest_probe = ProbeHandler()
+        manifest_probe._handle_app_manifest()
+
+        self.assertEqual(manifest_probe.code, 200)
+        self.assertEqual(manifest_probe.content_type, "application/manifest+json")
+        self.assertEqual(manifest_probe.payload["short_name"], "OCP")
+        self.assertEqual(manifest_probe.payload["start_url"], "/app")
+        self.assertEqual(manifest_probe.payload["display"], "standalone")
+
     def test_server_easy_page_handler_returns_human_friendly_html(self):
         alpha = self.make_stack("alpha")
         beta = self.make_stack("beta")
@@ -4960,6 +5001,25 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("OCP Easy Setup", markup)
         self.assertIn("Connect Everything", markup)
         self.assertIn("beta-node", markup)
+
+    def test_server_app_module_exposes_unified_app_surface(self):
+        alpha = self.make_stack("alpha")
+
+        manifest = server_app.build_app_manifest(alpha.mesh)
+        self.assertEqual(manifest["short_name"], "OCP")
+        self.assertEqual(manifest["start_url"], "/app")
+        self.assertEqual(manifest["scope"], "/")
+        self.assertEqual(manifest["display"], "standalone")
+
+        markup = server_app.build_app_page(alpha.mesh)
+        self.assertIn("OCP App", markup)
+        self.assertIn("OCP Easy Setup", markup)
+        self.assertIn("OCP Control Deck", markup)
+        self.assertIn("/easy", markup)
+        self.assertIn("/control", markup)
+        self.assertIn("/mesh/manifest", markup)
+        self.assertIn("/mesh/contract", markup)
+        self.assertIn("Install this app", markup)
 
     def test_server_missions_module_exposes_operator_action_surface(self):
         alpha = self.make_stack("alpha")
@@ -5273,6 +5333,12 @@ class SovereignMeshTests(unittest.TestCase):
             def __init__(self):
                 self.calls = []
 
+            def _handle_app_page(self):
+                self.calls.append(("app",))
+
+            def _handle_app_manifest(self):
+                self.calls.append(("app_manifest",))
+
             def _handle_easy_page(self):
                 self.calls.append(("easy",))
 
@@ -5308,12 +5374,19 @@ class SovereignMeshTests(unittest.TestCase):
             server_routes.resolve_get_route("/mesh/missions/mission-1/continuity").handler_name,
             "_handle_mesh_mission_continuity_get",
         )
+        self.assertEqual(server_routes.resolve_get_route("/").handler_name, "_handle_app_page")
+        self.assertEqual(server_routes.resolve_get_route("/app").handler_name, "_handle_app_page")
+        self.assertEqual(server_routes.resolve_get_route("/app.webmanifest").handler_name, "_handle_app_manifest")
+        self.assertEqual(server_routes.resolve_get_route("/easy").handler_name, "_handle_easy_page")
         self.assertEqual(server_routes.resolve_get_route("/mesh/contract").handler_name, "_handle_mesh_contract")
         self.assertEqual(
             server_routes.resolve_post_route("/mesh/notifications/n-1/ack").handler_name,
             "_handle_mesh_notification_ack",
         )
 
+        self.assertTrue(server_routes.dispatch_get(probe, "/", {}))
+        self.assertTrue(server_routes.dispatch_get(probe, "/app", {}))
+        self.assertTrue(server_routes.dispatch_get(probe, "/app.webmanifest", {}))
         self.assertTrue(server_routes.dispatch_get(probe, "/easy", {}))
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/control/stream", {"since": ["4"]}))
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/contract", {}))
@@ -5329,6 +5402,9 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(
             probe.calls,
             [
+                ("app",),
+                ("app",),
+                ("app_manifest",),
                 ("easy",),
                 ("control_stream", {"since": ["4"]}),
                 ("contract",),
@@ -5658,24 +5734,41 @@ class SovereignMeshTests(unittest.TestCase):
             content_type = response.headers.get("Content-Type")
 
         self.assertEqual(content_type, "text/html; charset=utf-8")
+        self.assertIn("OCP App", markup)
+        self.assertIn("One app for the mesh.", markup)
         self.assertIn("OCP Easy Setup", markup)
-        self.assertIn("Connect two computers without becoming the network department.", markup)
-        self.assertIn("Nearby Computers", markup)
-        self.assertIn("Scan Nearby", markup)
-        self.assertIn("Connect Everything", markup)
-        self.assertIn("Test Whole Mesh", markup)
-        self.assertIn("Send Test Mission", markup)
-        self.assertIn("Copy My Easy Link", markup)
-        self.assertIn("Share This Easy Link", markup)
-        self.assertIn("Scan This QR Code", markup)
-        self.assertIn("qrcode.min.js", markup)
-        self.assertIn("Open Advanced Deck", markup)
-        self.assertIn("beta-node", markup)
+        self.assertIn("OCP Control Deck", markup)
+        self.assertIn("/easy", markup)
+        self.assertIn("/control", markup)
+        self.assertIn("/app.webmanifest", markup)
+
+        with urlopen(f"{base_url}/app") as response:
+            app_markup = response.read().decode("utf-8")
+
+        self.assertIn("OCP App", app_markup)
+
+        with urlopen(f"{base_url}/app.webmanifest") as response:
+            manifest = json.loads(response.read().decode("utf-8"))
+
+        self.assertEqual(manifest["short_name"], "OCP")
+        self.assertEqual(manifest["start_url"], "/app")
 
         with urlopen(f"{base_url}/easy") as response:
             easy_markup = response.read().decode("utf-8")
 
         self.assertIn("OCP Easy Setup", easy_markup)
+        self.assertIn("Connect two computers without becoming the network department.", easy_markup)
+        self.assertIn("Nearby Computers", easy_markup)
+        self.assertIn("Scan Nearby", easy_markup)
+        self.assertIn("Connect Everything", easy_markup)
+        self.assertIn("Test Whole Mesh", easy_markup)
+        self.assertIn("Send Test Mission", easy_markup)
+        self.assertIn("Copy My Easy Link", easy_markup)
+        self.assertIn("Share This Easy Link", easy_markup)
+        self.assertIn("Scan This QR Code", easy_markup)
+        self.assertIn("qrcode.min.js", easy_markup)
+        self.assertIn("Open Advanced Deck", easy_markup)
+        self.assertIn("beta-node", easy_markup)
 
     def test_start_ocp_easy_helpers_prefer_local_browser_url_for_wildcard_hosts(self):
         self.assertEqual(start_ocp_easy.display_host_for_browser("0.0.0.0"), "127.0.0.1")

@@ -20,7 +20,8 @@ python3 scripts/start_ocp_easy.py
 That launcher:
 
 - starts the standalone OCP node with local defaults
-- opens the easy setup page automatically in your browser
+- opens the unified OCP app automatically in your browser
+- keeps easy setup available at `/easy`
 - keeps the advanced deck available at `/control`
 
 If you prefer the shell starter instead:
@@ -37,8 +38,10 @@ That script:
 
 By default, the node comes up on:
 
-- easy setup: `http://127.0.0.1:8421/`
-- advanced control deck: `http://127.0.0.1:8421/control`
+- OCP app: `http://127.0.0.1:8421/`
+- installable app shell: `http://127.0.0.1:8421/app`
+- easy setup module: `http://127.0.0.1:8421/easy`
+- advanced control module: `http://127.0.0.1:8421/control`
 - manifest: `http://127.0.0.1:8421/mesh/manifest`
 
 ## 3. Verify it is alive
@@ -110,7 +113,7 @@ On machine two:
 OCP_HOST=0.0.0.0 OCP_PORT=8422 OCP_NODE_ID=beta-node OCP_DISPLAY_NAME=Beta python3 scripts/start_ocp_easy.py
 ```
 
-Then open `http://HOST_IP:8421/` on each machine and use `Connect Everything`, then `Test Whole Mesh`.
+Then open `http://HOST_IP:8421/` on each machine, choose the `Setup` tab, use `Connect Everything`, then `Test Whole Mesh`.
 
 If scan does not immediately find the other machine, use `Copy My Easy Link` on one computer and paste that address into the manual connect box on the other one.
 You can also scan the QR code from the easy page on the other device and open the pairing link that way.
@@ -119,5 +122,6 @@ You can also scan the QR code from the easy page on the other device and open th
 
 - OCP is standalone.
 - Personal Mirror can integrate with it, but is not required to run it.
-- The easiest operator surface is `/`.
-- The advanced deck remains at `/control`.
+- The main operator app is `/`.
+- The easy setup module remains at `/easy`.
+- The advanced deck module remains at `/control`.

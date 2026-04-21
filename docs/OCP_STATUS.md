@@ -70,7 +70,8 @@ Related planning docs:
 - SSE-backed control stream for the cockpit so mission, queue, helper, approval, and notification updates can push into the deck without waiting for timer refreshes
 - Active peer seek/discovery with candidate tracking, optional auto-connect, and mesh-visible discovery records
 - First operator-grade `Connect Devices` flow in the control deck with nearby scan, one-click connect, built-in reachability diagnostics, and one-click test missions
-- New plain-language easy setup surface at `GET /` and `GET /easy` so first-run pairing can start on a friendlier page while `/control` remains the advanced cockpit
+- New unified OCP app shell at `GET /` and `GET /app` so phone and desktop operators get setup, control, and protocol inspection in one surface
+- Plain-language easy setup remains available at `GET /easy` so first-run pairing can stay friendly while `/control` remains the advanced cockpit module
 - Easy setup share-link copy and plain troubleshooting guidance so nearby pairing can fall back to “copy this link to the other computer” instead of terminal instructions
 - QR pairing on the easy page plus an auto-open launcher script so first-run setup can start with `python3 scripts/start_ocp_easy.py` and a scannable pairing link
 - One-button `Connect Everything` mesh join flow so the runtime can scan, connect, and fold nearby trusted devices into one reachable mesh without per-peer clicking
@@ -168,9 +169,11 @@ Related planning docs:
 
 - Manifest: `GET /mesh/manifest`
 - HTTP contract and schema snapshot: `GET /mesh/contract`
-- Easy setup UI: `GET /`
-- Alternate easy setup UI: `GET /easy`
-- Phone control UI: `GET /control`
+- Unified OCP app: `GET /`
+- Installable app shell: `GET /app`
+- App manifest: `GET /app.webmanifest`
+- Easy setup module: `GET /easy`
+- Phone control module: `GET /control`
 - Phone control stream: `GET /mesh/control/stream`
 - Device profile: `GET /mesh/device-profile`
 - Peer stream snapshot: `GET /mesh/stream`
@@ -267,4 +270,4 @@ python3 -m unittest tests.test_sovereign_mesh
 ```
 
 Current standalone baseline:
-- `tests.test_sovereign_mesh`: 154 tests passing
+- `tests.test_sovereign_mesh`: 156 tests passing

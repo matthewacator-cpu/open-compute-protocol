@@ -78,10 +78,13 @@ Starting The Open Compute Protocol
   identity:     $identity_dir
   workspace:    $workspace_root
 
-Easy setup:
+OCP app:
   http://$display_host:$port/
 
-Advanced control deck:
+Easy setup module:
+  http://$display_host:$port/easy
+
+Advanced control module:
   http://$display_host:$port/control
 EOF
 

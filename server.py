@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlparse
 from mesh import SovereignMesh
 from mesh.sovereign import _normalize_base_url, _preferred_local_base_url
 from runtime import OCPRegistry, OCPStore
+from server_app import build_app_manifest as _build_app_manifest, build_app_page as _build_app_page
 from server_connect import (
     build_easy_page as _build_easy_page,
     connect_all_peers as _connect_all_peers_impl,
@@ -5387,6 +5388,14 @@ def build_easy_page(mesh: SovereignMesh) -> str:
     return _build_easy_page(mesh)
 
 
+def build_app_page(mesh: SovereignMesh) -> str:
+    return _build_app_page(mesh)
+
+
+def build_app_manifest(mesh: SovereignMesh) -> dict[str, Any]:
+    return _build_app_manifest(mesh)
+
+
 class OCPHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         return
@@ -5427,6 +5436,14 @@ class OCPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _send_manifest_json(self, payload: dict[str, Any], code: int = 200):
+        raw = json.dumps(payload).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/manifest+json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
     def _begin_sse(self, *, close_connection: bool = False):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -5453,6 +5470,12 @@ class OCPHandler(BaseHTTPRequestHandler):
 
     def _handle_easy_page(self):
         self._send_html(build_easy_page(self._mesh()))
+
+    def _handle_app_page(self):
+        self._send_html(build_app_page(self._mesh()))
+
+    def _handle_app_manifest(self):
+        self._send_manifest_json(build_app_manifest(self._mesh()))
 
     def _handle_control_stream(self, params):
         _handle_control_stream_impl(self, self._mesh(), params)

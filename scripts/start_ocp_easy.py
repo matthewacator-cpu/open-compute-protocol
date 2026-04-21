@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start OCP with local defaults and open the easy setup page automatically."""
+"""Start OCP with local defaults and open the unified app automatically."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def build_open_url(host: str, port: int, path: str = "/") -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Start OCP and open the easy setup page automatically.")
+    parser = argparse.ArgumentParser(description="Start OCP and open the unified app automatically.")
     parser.add_argument("--host", default=os.environ.get("OCP_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("OCP_PORT", "8421")))
     parser.add_argument("--db-path", default="")
@@ -126,10 +126,13 @@ def main() -> int:
     print(f"  node id:      {args.node_id}")
     print(f"  display name: {args.display_name}")
     print()
-    print("Easy setup:")
+    print("OCP app:")
     print(f"  {open_url}")
     print()
-    print("Advanced control deck:")
+    print("Easy setup module:")
+    print(f"  {build_open_url(args.host, args.port, '/easy')}")
+    print()
+    print("Advanced control module:")
     print(f"  {build_open_url(args.host, args.port, '/control')}")
     if args.host in {"0.0.0.0", "::"}:
         print()

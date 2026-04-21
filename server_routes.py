@@ -30,7 +30,9 @@ class RouteSpec:
 
 GET_ROUTE_GROUPS: dict[str, tuple[RouteSpec, ...]] = {
     "pages": (
-        RouteSpec(path="/", handler_name="_handle_easy_page"),
+        RouteSpec(path="/", handler_name="_handle_app_page"),
+        RouteSpec(path="/app", handler_name="_handle_app_page"),
+        RouteSpec(path="/app.webmanifest", handler_name="_handle_app_manifest"),
         RouteSpec(path="/easy", handler_name="_handle_easy_page"),
         RouteSpec(path="/control", handler_name="_handle_control_page"),
         RouteSpec(path="/control/mobile", handler_name="_handle_control_page"),
