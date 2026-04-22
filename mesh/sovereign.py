@@ -2452,7 +2452,23 @@ class SovereignMesh:
                 return client, peer or {}
             return client, {}
         peer = self._row_to_peer(self._get_peer_row(peer_id)) if peer_id else {}
-        endpoint_url = (base_url or (peer or {}).get("endpoint_url") or "").strip()
+        peer_metadata = dict((peer or {}).get("metadata") or {})
+        candidate_base_url = ""
+        if peer_id:
+            candidate = self._discovery_candidate_by_peer_id(peer_id)
+            if candidate:
+                candidate_base_url = (
+                    candidate.get("base_url")
+                    or candidate.get("endpoint_url")
+                    or ""
+                ).strip()
+        endpoint_url = (
+            base_url
+            or peer_metadata.get("last_reachable_base_url")
+            or candidate_base_url
+            or (peer or {}).get("endpoint_url")
+            or ""
+        ).strip()
         if not endpoint_url:
             raise MeshPolicyError("peer endpoint_url is unavailable")
         return MeshPeerClient(endpoint_url, timeout=float(timeout or 8.0)), peer or {}
@@ -2497,6 +2513,7 @@ class SovereignMesh:
                     or remote_card.get("device_profile")
                     or {}
                 ),
+                "last_reachable_base_url": normalized_base_url,
                 "last_remote_handshake": response.get("accepted_at"),
             },
         )
@@ -2669,7 +2686,12 @@ class SovereignMesh:
         base_token = _normalize_base_url(base_url)
         peer = self._row_to_peer(self._get_peer_row(peer_token)) if peer_token else {}
         if not base_token and peer:
-            base_token = _normalize_base_url(peer.get("endpoint_url") or "")
+            peer_metadata = dict(peer.get("metadata") or {})
+            base_token = _normalize_base_url(
+                peer_metadata.get("last_reachable_base_url")
+                or peer.get("endpoint_url")
+                or ""
+            )
         if not base_token and peer_token:
             candidate = self._discovery_candidate_by_peer_id(peer_token)
             if candidate:
@@ -3047,6 +3069,11 @@ class SovereignMesh:
         remote_client, peer = self._resolve_peer_client(peer_id, client=client, base_url=base_url)
         if not peer:
             raise MeshPolicyError("peer must be connected before sync")
+        reachable_base_url = _normalize_base_url(
+            base_url
+            or getattr(remote_client, "base_url", "")
+            or ((peer.get("metadata") or {}).get("last_reachable_base_url") or peer.get("endpoint_url") or "")
+        )
         remote_manifest = None
         if refresh_manifest or not peer.get("card"):
             remote_manifest = remote_client.manifest()
@@ -3076,6 +3103,7 @@ class SovereignMesh:
                         remote_manifest.get("sync_policy")
                         or self._device_profile_sync_policy(remote_device_profile)
                     ),
+                    "last_reachable_base_url": reachable_base_url,
                     "last_manifest_refresh_at": _utcnow(),
                 },
             )
@@ -3113,6 +3141,7 @@ class SovereignMesh:
                 "remote_generated_at": remote_stream.get("generated_at") or "",
                 "remote_transport": dict(remote_stream.get("transport") or {}),
                 "last_imported_event_count": imported,
+                "last_reachable_base_url": reachable_base_url,
                 "heartbeat": heartbeat,
             },
             status="connected",

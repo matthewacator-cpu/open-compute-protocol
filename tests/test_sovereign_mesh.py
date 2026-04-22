@@ -5792,6 +5792,124 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertTrue(str(connected["peer"]["endpoint_url"]).startswith("http://"))
         self.assertNotIn("0.0.0.0", connected["peer"]["endpoint_url"])
 
+    def test_connect_peer_records_last_reachable_base_url_when_remote_manifest_advertises_other_endpoint(self):
+        alpha = self.make_stack("alpha")
+        beta = self.make_stack("beta")
+        _, beta_base_url = self.serve_mesh(beta)
+
+        original_get_manifest = beta.mesh.get_manifest
+
+        def manifest_with_virtual_endpoint():
+            manifest = dict(original_get_manifest())
+            card = dict(manifest.get("organism_card") or {})
+            card["endpoint_url"] = "http://198.51.100.42:8421"
+            card["stream_url"] = "http://198.51.100.42:8421/mesh/stream"
+            manifest["organism_card"] = card
+            return manifest
+
+        beta.mesh.get_manifest = manifest_with_virtual_endpoint
+        try:
+            connected = alpha.mesh.connect_peer(base_url=beta_base_url, trust_tier="trusted")
+        finally:
+            beta.mesh.get_manifest = original_get_manifest
+
+        self.assertEqual(connected["status"], "ok")
+        peer = alpha.mesh.list_peers(limit=10)["peers"][0]
+        self.assertEqual(peer["endpoint_url"], "http://198.51.100.42:8421")
+        self.assertEqual(peer["metadata"]["last_reachable_base_url"], beta_base_url)
+
+        resolved_client, resolved_peer = alpha.mesh._resolve_peer_client("beta-node")
+        self.assertEqual(resolved_peer["peer_id"], "beta-node")
+        self.assertEqual(resolved_client.base_url, beta_base_url)
+
+    def test_sync_peer_refresh_records_last_reachable_base_url(self):
+        alpha = self.make_stack("alpha")
+        beta = self.make_stack("beta")
+        beta_client, beta_base_url = self.serve_mesh(beta)
+
+        original_get_manifest = beta.mesh.get_manifest
+
+        def manifest_with_virtual_endpoint():
+            manifest = dict(original_get_manifest())
+            card = dict(manifest.get("organism_card") or {})
+            card["endpoint_url"] = "http://198.51.100.43:8421"
+            card["stream_url"] = "http://198.51.100.43:8421/mesh/stream"
+            manifest["organism_card"] = card
+            return manifest
+
+        remote_card = dict(beta.mesh.get_manifest()["organism_card"])
+        remote_card["endpoint_url"] = "http://198.51.100.43:8421"
+        remote_card["stream_url"] = "http://198.51.100.43:8421/mesh/stream"
+        alpha.mesh.remember_peer_card(remote_card, trust_tier="trusted", status="connected")
+
+        beta.mesh.get_manifest = manifest_with_virtual_endpoint
+        try:
+            synced = alpha.mesh.sync_peer(
+                "beta-node",
+                client=beta_client,
+                base_url=beta_base_url,
+                limit=20,
+                refresh_manifest=True,
+            )
+        finally:
+            beta.mesh.get_manifest = original_get_manifest
+
+        self.assertEqual(synced["status"], "ok")
+        self.assertEqual(synced["peer"]["metadata"]["last_reachable_base_url"], beta_base_url)
+
+    def test_dispatch_job_to_peer_prefers_last_reachable_base_url_over_advertised_endpoint(self):
+        alpha = self.make_stack("alpha")
+        beta = self.make_stack("beta")
+        _, beta_base_url = self.serve_mesh(beta)
+
+        original_get_manifest = beta.mesh.get_manifest
+
+        def manifest_with_virtual_endpoint():
+            manifest = dict(original_get_manifest())
+            card = dict(manifest.get("organism_card") or {})
+            card["endpoint_url"] = "http://198.51.100.44:8421"
+            card["stream_url"] = "http://198.51.100.44:8421/mesh/stream"
+            manifest["organism_card"] = card
+            return manifest
+
+        beta.mesh.get_manifest = manifest_with_virtual_endpoint
+        try:
+            alpha.mesh.connect_peer(base_url=beta_base_url, trust_tier="trusted")
+        finally:
+            beta.mesh.get_manifest = original_get_manifest
+
+        captured = {}
+
+        class RecordingClient:
+            def __init__(self, base_url, *, timeout=8.0):
+                captured["base_url"] = base_url
+                captured["timeout"] = timeout
+
+            def submit_job(self, envelope):
+                captured["request_id"] = envelope["request"]["request_id"]
+                captured["job_kind"] = envelope["body"]["job"]["kind"]
+                return {"status": "queued", "job": {"id": "remote-job-1"}}
+
+        with mock.patch("mesh.sovereign.MeshPeerClient", RecordingClient):
+            response = alpha.mesh.dispatch_job_to_peer(
+                "beta-node",
+                {
+                    "kind": "agent.echo",
+                    "origin": "alpha-node",
+                    "target": "beta-node",
+                    "requirements": {"capabilities": ["python"]},
+                    "policy": {"classification": "trusted", "mode": "batch"},
+                    "payload": {"message": "networked"},
+                    "artifact_inputs": [],
+                },
+                request_id="reachable-dispatch-test",
+            )
+
+        self.assertEqual(response["status"], "queued")
+        self.assertEqual(captured["base_url"], beta_base_url)
+        self.assertEqual(captured["request_id"], "reachable-dispatch-test")
+        self.assertEqual(captured["job_kind"], "agent.echo")
+
     def test_notification_and_approval_endpoints_are_exposed_over_http(self):
         alpha = self.make_stack("alpha")
         alpha_client, _ = self.serve_mesh(alpha)
