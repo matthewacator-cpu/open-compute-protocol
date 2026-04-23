@@ -36,6 +36,7 @@ PATH_PARAM_BY_PREFIX = {
 
 QUERY_FIELDS: dict[str, dict[str, str]] = {
     "_handle_control_stream": {"since": "integer", "limit": "integer", "once": "boolean"},
+    "_handle_mesh_app_history": {"limit": "integer"},
     "_handle_mesh_artifact_get": {"include_content": "boolean"},
     "_handle_mesh_artifact_list": {
         "limit": "integer",
@@ -84,13 +85,28 @@ QUERY_FIELDS: dict[str, dict[str, str]] = {
 
 BODY_FIELDS: dict[str, dict[str, str]] = {
     "_handle_mesh_autonomy_activate": {"mode": "string", "run_proof": "boolean", "repair": "boolean", "limit": "integer"},
+    "_handle_mesh_app_history_sample": {"source": "string"},
     "_handle_mesh_approval_request": {"title": "string", "summary": "string", "metadata": "object"},
     "_handle_mesh_approval_resolve": {"decision": "string", "operator_peer_id": "string", "metadata": "object"},
     "_handle_mesh_artifact_pin": {"artifact_id": "string", "pinned": "boolean", "reason": "string"},
     "_handle_mesh_artifact_publish": {"artifact": "object", "content": "any", "metadata": "object"},
     "_handle_mesh_artifact_purge": {"limit": "integer"},
-    "_handle_mesh_artifact_replicate": {"peer_id": "string", "artifact_id": "string", "digest": "string", "pin": "boolean"},
-    "_handle_mesh_artifact_replicate_graph": {"peer_id": "string", "artifact_id": "string", "digest": "string", "pin": "boolean"},
+    "_handle_mesh_artifact_replicate": {
+        "peer_id": "string",
+        "artifact_id": "string",
+        "digest": "string",
+        "base_url": "string",
+        "pin": "boolean",
+        "remote_auth": "object",
+    },
+    "_handle_mesh_artifact_replicate_graph": {
+        "peer_id": "string",
+        "artifact_id": "string",
+        "digest": "string",
+        "base_url": "string",
+        "pin": "boolean",
+        "remote_auth": "object",
+    },
     "_handle_mesh_artifact_verify_mirror": {"artifact_id": "string", "peer_id": "string", "source_artifact_id": "string", "digest": "string"},
     "_handle_mesh_attempt_complete": {"result": "object", "executor": "string", "metadata": "object"},
     "_handle_mesh_attempt_fail": {"error": "string", "retryable": "boolean", "metadata": "object"},
@@ -158,6 +174,9 @@ BODY_FIELDS: dict[str, dict[str, str]] = {
 
 
 REQUEST_REFS: dict[str, str] = {
+    "_handle_mesh_artifact_replicate": "ArtifactReplicateRequest",
+    "_handle_mesh_artifact_replicate_graph": "ArtifactReplicateRequest",
+    "_handle_mesh_app_history_sample": "AppHistorySampleRequest",
     "_handle_mesh_artifact_publish": "SignedEnvelope",
     "_handle_mesh_autonomy_activate": "AutonomicActivateRequest",
     "_handle_mesh_continuity_restore_plan": "ContinuityRestorePlanRequest",
@@ -172,6 +191,8 @@ REQUEST_REFS: dict[str, str] = {
 
 RESPONSE_REFS: dict[str, str] = {
     "_handle_control_stream": "ControlStreamSSE",
+    "_handle_mesh_app_history": "AppStatusHistory",
+    "_handle_mesh_app_history_sample": "AppHistorySampleResponse",
     "_handle_mesh_app_status": "AppStatus",
     "_handle_mesh_contract": "ContractSnapshot",
     "_handle_mesh_artifact_get": "Artifact",
@@ -179,8 +200,8 @@ RESPONSE_REFS: dict[str, str] = {
     "_handle_mesh_artifact_pin": "ArtifactPinResponse",
     "_handle_mesh_artifact_publish": "ArtifactPublishResponse",
     "_handle_mesh_artifact_purge": "ArtifactPurgeResponse",
-    "_handle_mesh_artifact_replicate": "ArtifactReplicationResponse",
-    "_handle_mesh_artifact_replicate_graph": "ArtifactGraphReplicationResponse",
+    "_handle_mesh_artifact_replicate": "ArtifactReplicateResponse",
+    "_handle_mesh_artifact_replicate_graph": "ArtifactGraphReplicateResponse",
     "_handle_mesh_artifact_verify_mirror": "ArtifactMirrorVerification",
     "_handle_mesh_autonomy_activate": "AutonomicRun",
     "_handle_mesh_autonomy_status": "AutonomicMeshStatus",

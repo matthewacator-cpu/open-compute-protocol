@@ -302,6 +302,41 @@ def build_app_page(mesh: SovereignMesh) -> str:
       color: #2a3c50;
       line-height: 1.35;
     }}
+    .proof-timeline {{
+      margin-top: 14px;
+      display: grid;
+      gap: 8px;
+    }}
+    .timeline-item {{
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.58);
+    }}
+    .timeline-dot {{
+      width: 12px;
+      height: 12px;
+      margin-top: 4px;
+      border-radius: 999px;
+      background: var(--gold);
+      box-shadow: 0 0 0 5px rgba(168, 108, 36, 0.12);
+    }}
+    .timeline-item[data-status="ok"] .timeline-dot,
+    .timeline-item[data-status="completed"] .timeline-dot {{
+      background: var(--green);
+      box-shadow: 0 0 0 5px rgba(29, 125, 88, 0.12);
+    }}
+    .timeline-item[data-status="failed"] .timeline-dot,
+    .timeline-item[data-status="warning"] .timeline-dot {{
+      background: #c84332;
+      box-shadow: 0 0 0 5px rgba(200, 67, 50, 0.12);
+    }}
+    .timeline-item strong {{ display: block; font-size: 0.92rem; }}
+    .timeline-item span {{ display: block; color: var(--muted); font-size: 0.9rem; line-height: 1.35; }}
     .phone-link {{
       width: 100%;
       border: 1px solid var(--line);
@@ -502,12 +537,15 @@ def build_app_page(mesh: SovereignMesh) -> str:
           </div>
           <div class="today-actions">
             <button class="primary-action" type="button" data-activate-autonomic>Activate Mesh</button>
+            <button class="secondary-action" type="button" data-run-best-device>Run on Best Device</button>
+            <button class="secondary-action" type="button" data-replicate-proof-artifact>Replicate Proof Artifact</button>
             <button class="secondary-action" type="button" data-refresh-status>Refresh</button>
             <a class="secondary-action" href="/mesh/app/status" target="_blank" rel="noreferrer">Inspect App Status</a>
           </div>
           <ul class="next-actions" data-next-actions>
             <li>Press Activate Mesh to discover, repair, enlist, prove, and explain this mesh.</li>
           </ul>
+          <div class="proof-timeline" data-proof-timeline aria-label="Proof timeline"></div>
         </div>
         <aside class="today-card">
           <p class="eyebrow">Phone Link + QR</p>
@@ -603,7 +641,8 @@ def build_app_page(mesh: SovereignMesh) -> str:
       actions: document.querySelector("[data-next-actions]"),
       phone: document.querySelector("[data-phone-link]"),
       qr: document.querySelector("[data-phone-qr]"),
-      routeList: document.querySelector("[data-route-list]")
+      routeList: document.querySelector("[data-route-list]"),
+      timeline: document.querySelector("[data-proof-timeline]")
     }};
 
     const text = (value, fallback = "") => String(value || fallback || "");
@@ -647,6 +686,27 @@ def build_app_page(mesh: SovereignMesh) -> str:
           const li = document.createElement("li");
           li.textContent = String(item);
           appEls.actions.appendChild(li);
+        }});
+      }}
+      if (appEls.timeline) {{
+        const timeline = (setup.timeline || []).slice(-8);
+        appEls.timeline.innerHTML = "";
+        timeline.forEach((event) => {{
+          const item = document.createElement("div");
+          item.className = "timeline-item";
+          item.dataset.status = text(event.status, "info");
+          const dot = document.createElement("div");
+          dot.className = "timeline-dot";
+          const body = document.createElement("div");
+          const title = document.createElement("strong");
+          title.textContent = text(event.kind, "event").replace(/_/g, " ");
+          const summary = document.createElement("span");
+          summary.textContent = text(event.summary, "OCP recorded a setup event.");
+          body.appendChild(title);
+          body.appendChild(summary);
+          item.appendChild(dot);
+          item.appendChild(body);
+          appEls.timeline.appendChild(item);
         }});
       }}
       if (appEls.routeList) {{
@@ -710,6 +770,65 @@ def build_app_page(mesh: SovereignMesh) -> str:
       }} finally {{
         button.disabled = false;
         button.textContent = original;
+      }}
+    }});
+    document.querySelector("[data-run-best-device]")?.addEventListener("click", async () => {{
+      setText(appEls.summary, "Asking the scheduler which device should run a small OCP-controlled proof job...");
+      try {{
+        const result = await fetchJson("/mesh/jobs/schedule", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{
+            request_id: "app-best-device-" + Date.now(),
+            allow_local: true,
+            allow_remote: true,
+            job: {{
+              kind: "shell",
+              requirements: {{ capabilities: ["shell"] }},
+              policy: {{ classification: "trusted", mode: "batch", secret_scopes: [] }},
+              metadata: {{ control_flow: "app_home", demo_action: "run_best_device" }},
+              payload: {{ command: "echo OCP best-device proof" }}
+            }}
+          }})
+        }});
+        const decision = result.decision || result;
+        const target = decision.target_peer_id || decision.peer_id || "selected target";
+        setText(appEls.summary, "Scheduler selected " + target + " for this workload.");
+        await refreshAppStatus();
+      }} catch (error) {{
+        setText(appEls.summary, "Run on Best Device failed: " + error.message);
+      }}
+    }});
+    document.querySelector("[data-replicate-proof-artifact]")?.addEventListener("click", async () => {{
+      try {{
+        const status = await refreshAppStatus();
+        const routes = (((status.route_health || {{}}).routes) || []);
+        const proof = status.latest_proof || {{}};
+        const defaultPeer = routes[0]?.peer_id || "";
+        const defaultArtifact = proof.artifact_id || "";
+        const peerId = window.prompt("Peer id to pull from", defaultPeer);
+        if (!peerId) return;
+        const artifactId = window.prompt("Remote artifact id to replicate", defaultArtifact);
+        if (!artifactId) return;
+        const remoteToken = window.prompt("Remote operator token for that peer (kept in memory only)", "");
+        const payload = {{
+          peer_id: peerId,
+          artifact_id: artifactId,
+          pin: true
+        }};
+        if (remoteToken) {{
+          payload.remote_auth = {{ type: "operator_token", token: remoteToken }};
+        }}
+        setText(appEls.summary, "Replicating and verifying proof artifact from " + peerId + "...");
+        const result = await fetchJson("/mesh/artifacts/replicate", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify(payload)
+        }});
+        setText(appEls.summary, "Replicated " + ((result.artifact || {{}}).digest || artifactId) + " with " + ((result.verification || {{}}).status || "verification") + ".");
+        await refreshAppStatus();
+      }} catch (error) {{
+        setText(appEls.summary, "Replicate Proof Artifact failed: " + error.message);
       }}
     }});
     refreshAppStatus().catch(() => {{}});

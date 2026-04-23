@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 root_str = str(ROOT)
@@ -24,6 +24,7 @@ if root_str not in sys.path:
 
 import server
 import server_app
+import server_app_history
 import server_app_status
 import server_artifacts
 import server_browser_client
@@ -116,6 +117,8 @@ ProbeHandler._dispatch_get_request = server.OCPHandler._dispatch_get_request
 ProbeHandler._dispatch_post_request = server.OCPHandler._dispatch_post_request
 ProbeHandler._handle_app_page = server.OCPHandler._handle_app_page
 ProbeHandler._handle_app_manifest = server.OCPHandler._handle_app_manifest
+ProbeHandler._handle_mesh_app_history = server.OCPHandler._handle_mesh_app_history
+ProbeHandler._handle_mesh_app_history_sample = server.OCPHandler._handle_mesh_app_history_sample
 ProbeHandler._handle_mesh_app_status = server.OCPHandler._handle_mesh_app_status
 ProbeHandler._handle_control_page = server.OCPHandler._handle_control_page
 ProbeHandler._handle_easy_page = server.OCPHandler._handle_easy_page
@@ -259,6 +262,9 @@ def make_mesh_http_server(mesh):
                     return
                 if path == "/mesh/app/status":
                     self._send_json(server.build_app_status(mesh))
+                    return
+                if path == "/mesh/app/history":
+                    self._send_json(server_app_history.list_app_status_history(mesh, limit=int(params.get("limit", ["240"])[0])))
                     return
                 if path == "/mesh/autonomy/status":
                     self._send_json(mesh.autonomy_status())
@@ -428,6 +434,9 @@ def make_mesh_http_server(mesh):
                     return
                 if path == "/mesh/device-profile":
                     self._send_json(mesh.update_device_profile(dict(payload.get("device_profile") or {})))
+                    return
+                if path == "/mesh/app/history/sample":
+                    self._send_json(server_app_history.record_app_status_sample(mesh, payload))
                     return
                 if path == "/mesh/autonomy/activate":
                     self._send_json(
@@ -1007,6 +1016,77 @@ def make_mesh_http_server(mesh):
     return httpd, f"http://127.0.0.1:{httpd.server_address[1]}"
 
 
+def make_token_artifact_http_server(mesh, *, operator_token: str):
+    token = str(operator_token or "").strip()
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            return
+
+        def _send_json(self, payload, code=200):
+            raw = json.dumps(payload).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def _authorized(self) -> bool:
+            return bool(token and self.headers.get("X-OCP-Operator-Token", "") == token)
+
+        def do_GET(self):
+            parsed = urlparse(self.path)
+            path = parsed.path
+            params = parse_qs(parsed.query)
+            try:
+                if path == "/mesh/manifest":
+                    self._send_json(mesh.get_manifest())
+                    return
+                if path == "/mesh/artifacts":
+                    self._send_json(
+                        mesh.list_artifacts(
+                            limit=int(params.get("limit", ["25"])[0]),
+                            digest=params.get("digest", [""])[0],
+                        )
+                    )
+                    return
+                if path.startswith("/mesh/artifacts/"):
+                    artifact_id = path.split("/mesh/artifacts/", 1)[1]
+                    include_content = params.get("include_content", ["1"])[0] != "0"
+                    artifact = mesh.get_artifact(artifact_id, include_content=False)
+                    public = mesh._policy_allows_peer(dict(artifact.get("policy") or {}), None)
+                    if include_content and not public and not self._authorized():
+                        self._send_json({"error": "operator authorization required"}, 401)
+                        return
+                    self._send_json(
+                        mesh.get_artifact(
+                            artifact_id,
+                            requester_peer_id=params.get("peer_id", [""])[0],
+                            include_content=include_content,
+                        )
+                    )
+                    return
+                self._send_json({"error": "unknown endpoint"}, 404)
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+
+        def do_POST(self):
+            parsed = urlparse(self.path)
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(content_length)
+                payload = json.loads(raw.decode("utf-8")) if raw else {}
+                if parsed.path == "/mesh/handshake":
+                    self._send_json(mesh.accept_handshake(payload))
+                    return
+                self._send_json({"error": "unknown endpoint"}, 404)
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, 400)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    return httpd, f"http://127.0.0.1:{httpd.server_address[1]}"
+
+
 class SovereignMeshTests(unittest.TestCase):
     def setUp(self):
         self._tmpdirs = []
@@ -1088,6 +1168,16 @@ class SovereignMeshTests(unittest.TestCase):
         import threading
 
         httpd, base_url = make_mesh_http_server(stack.mesh)
+        stack.mesh.base_url = base_url
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        self._servers.append((httpd, thread))
+        return MeshPeerClient(base_url), base_url
+
+    def serve_token_artifact_mesh(self, stack, *, operator_token: str):
+        import threading
+
+        httpd, base_url = make_token_artifact_http_server(stack.mesh, operator_token=operator_token)
         stack.mesh.base_url = base_url
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
@@ -3307,6 +3397,52 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(pinned["status"], "ok")
         self.assertTrue(pinned["artifact"]["pinned"])
 
+    def test_private_artifact_replication_uses_explicit_remote_auth_without_persisting_token(self):
+        alpha = self.make_stack("alpha")
+        beta = self.make_stack("beta")
+        _, beta_base_url = self.serve_token_artifact_mesh(beta, operator_token="beta-secret")
+        alpha.mesh.connect_peer(base_url=beta_base_url, trust_tier="trusted")
+
+        artifact = beta.mesh.publish_local_artifact(
+            {"kind": "private-replication"},
+            media_type="application/json",
+            policy={"classification": "trusted", "mode": "batch"},
+            metadata={"artifact_kind": "bundle", "job_id": "private-replication"},
+        )
+
+        with mock.patch.dict(os.environ, {"OCP_OPERATOR_TOKEN": "alpha-secret"}, clear=False):
+            with self.assertRaises(Exception) as missing_auth:
+                alpha.mesh.replicate_artifact_from_peer(
+                    "beta-node",
+                    artifact_id=artifact["id"],
+                )
+            getattr(missing_auth.exception, "close", lambda: None)()
+            with self.assertRaises(Exception) as wrong_auth:
+                alpha.mesh.replicate_artifact_from_peer(
+                    "beta-node",
+                    artifact_id=artifact["id"],
+                    remote_auth={"type": "operator_token", "token": "wrong-secret"},
+                )
+            getattr(wrong_auth.exception, "close", lambda: None)()
+            replicated = alpha.mesh.replicate_artifact_from_peer(
+                "beta-node",
+                artifact_id=artifact["id"],
+                remote_auth={"type": "operator_token", "token": "beta-secret"},
+                pin=True,
+            )
+
+        self.assertEqual(replicated["status"], "replicated")
+        self.assertEqual(replicated["remote_auth"], {"type": "operator_token", "status": "used", "redacted": True})
+        self.assertEqual(replicated["artifact"]["digest"], artifact["digest"])
+        self.assertTrue(replicated["artifact"]["metadata"]["artifact_sync"]["pinned"])
+        self.assertEqual(
+            replicated["artifact"]["metadata"]["artifact_sync"]["remote_auth"],
+            {"type": "operator_token", "status": "used", "redacted": True},
+        )
+        serialized = json.dumps({"replicated": replicated, "events": alpha.mesh.stream_snapshot(limit=25)}, sort_keys=True)
+        self.assertNotIn("beta-secret", serialized)
+        self.assertNotIn("alpha-secret", serialized)
+
     def test_artifact_graph_replication_is_exposed_over_http(self):
         alpha = self.make_stack("alpha")
         beta = self.make_stack("beta")
@@ -5029,6 +5165,9 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("Setup Details", probe.payload)
         self.assertIn("Advanced Control", probe.payload)
         self.assertIn("Activate Mesh", probe.payload)
+        self.assertIn("Run on Best Device", probe.payload)
+        self.assertIn("Replicate Proof Artifact", probe.payload)
+        self.assertIn("Proof timeline", probe.payload)
         self.assertIn("/easy", probe.payload)
         self.assertIn("/control", probe.payload)
         self.assertIn("/mesh/contract", probe.payload)
@@ -5063,6 +5202,7 @@ class SovereignMeshTests(unittest.TestCase):
             "latest_proof": {"status": "none"},
             "autonomy": {"last_run": {}},
             "app_urls": {"phone_url": "http://127.0.0.1:8421/app"},
+            "timeline": [],
         }
 
         with mock.patch.dict(os.environ, {"OCP_OPERATOR_TOKEN": "", "OCP_CONTROL_TOKEN": ""}, clear=False):
@@ -6047,6 +6187,12 @@ class SovereignMeshTests(unittest.TestCase):
             def _handle_mesh_app_status(self):
                 self.calls.append(("app_status",))
 
+            def _handle_mesh_app_history(self, params):
+                self.calls.append(("app_history", dict(params)))
+
+            def _handle_mesh_app_history_sample(self, data):
+                self.calls.append(("app_history_sample", dict(data)))
+
             def _handle_mesh_manifest(self):
                 self.calls.append(("manifest",))
 
@@ -6079,8 +6225,10 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(server_routes.resolve_get_route("/easy").handler_name, "_handle_easy_page")
         self.assertEqual(server_routes.resolve_get_route("/mesh/contract").handler_name, "_handle_mesh_contract")
         self.assertEqual(server_routes.resolve_get_route("/mesh/app/status").handler_name, "_handle_mesh_app_status")
+        self.assertEqual(server_routes.resolve_get_route("/mesh/app/history").handler_name, "_handle_mesh_app_history")
         self.assertEqual(server_routes.resolve_get_route("/mesh/autonomy/status").handler_name, "_handle_mesh_autonomy_status")
         self.assertEqual(server_routes.resolve_get_route("/mesh/routes/health").handler_name, "_handle_mesh_routes_health")
+        self.assertEqual(server_routes.resolve_post_route("/mesh/app/history/sample").handler_name, "_handle_mesh_app_history_sample")
         self.assertEqual(server_routes.resolve_post_route("/mesh/autonomy/activate").handler_name, "_handle_mesh_autonomy_activate")
         self.assertEqual(server_routes.resolve_post_route("/mesh/routes/probe").handler_name, "_handle_mesh_routes_probe")
         self.assertEqual(
@@ -6095,10 +6243,12 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/control/stream", {"since": ["4"]}))
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/contract", {}))
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/app/status", {}))
+        self.assertTrue(server_routes.dispatch_get(probe, "/mesh/app/history", {"limit": ["5"]}))
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/manifest", {}))
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/missions/mission-1/continuity", {}))
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/missions/mission-1", {}))
         self.assertTrue(server_routes.dispatch_get(probe, "/mesh/artifacts/artifact-1", {"include_content": ["0"]}))
+        self.assertTrue(server_routes.dispatch_post(probe, "/mesh/app/history/sample", {"source": "test"}))
         self.assertTrue(server_routes.dispatch_post(probe, "/mesh/notifications/n-1/ack", {"status": "acked"}))
         self.assertTrue(server_routes.dispatch_post(probe, "/mesh/agents/handoff", {"handoff": {"summary": "route"}}))
         self.assertFalse(server_routes.dispatch_get(probe, "/mesh/unknown", {}))
@@ -6114,10 +6264,12 @@ class SovereignMeshTests(unittest.TestCase):
                 ("control_stream", {"since": ["4"]}),
                 ("contract",),
                 ("app_status",),
+                ("app_history", {"limit": ["5"]}),
                 ("manifest",),
                 ("mission_continuity", "/mesh/missions/mission-1/continuity"),
                 ("mission_get", "/mesh/missions/mission-1"),
                 ("artifact_get", "/mesh/artifacts/artifact-1", {"include_content": ["0"]}),
+                ("app_history_sample", {"source": "test"}),
                 ("notification_ack", "/mesh/notifications/n-1/ack", {"status": "acked"}),
                 ("handoff", {"handoff": {"summary": "route"}}),
             ],
@@ -6159,6 +6311,7 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("AutonomicRun", snapshot["schemas"])
         self.assertIn("RouteHealth", snapshot["schemas"])
         self.assertIn("AppStatus", snapshot["schemas"])
+        self.assertIn("AppStatusHistory", snapshot["schemas"])
         self.assertIn("ProtocolConformanceSnapshot", snapshot["schemas"])
         self.assertIn("runtime", snapshot["groups"])
         self.assertIn("missions", snapshot["groups"])
@@ -6166,8 +6319,10 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("artifacts", snapshot["groups"])
         self.assertIn("get:/mesh/contract", endpoint_ids)
         self.assertIn("get:/mesh/app/status", endpoint_ids)
+        self.assertIn("get:/mesh/app/history", endpoint_ids)
         self.assertIn("get:/mesh/autonomy/status", endpoint_ids)
         self.assertIn("get:/mesh/routes/health", endpoint_ids)
+        self.assertIn("post:/mesh/app/history/sample", endpoint_ids)
         self.assertIn("post:/mesh/autonomy/activate", endpoint_ids)
         self.assertIn("post:/mesh/routes/probe", endpoint_ids)
         self.assertIn("get:/mesh/missions/{mission_id}/continuity", endpoint_ids)
@@ -6197,6 +6352,16 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(app_status_contract["response"]["schema_ref"], "AppStatus")
         self.assertTrue(app_status_contract["response"]["schema_available"])
 
+        app_history_contract = server_contract.contract_for("GET", "/mesh/app/history")
+        self.assertEqual(app_history_contract["request"]["query"]["limit"], "integer")
+        self.assertEqual(app_history_contract["response"]["schema_ref"], "AppStatusHistory")
+        self.assertTrue(app_history_contract["response"]["schema_available"])
+
+        app_history_sample_contract = server_contract.contract_for("POST", "/mesh/app/history/sample")
+        self.assertEqual(app_history_sample_contract["request"]["schema_ref"], "AppHistorySampleRequest")
+        self.assertEqual(app_history_sample_contract["response"]["schema_ref"], "AppHistorySampleResponse")
+        self.assertTrue(app_history_sample_contract["response"]["schema_available"])
+
         activate_contract = server_contract.contract_for("POST", "/mesh/autonomy/activate")
         self.assertEqual(activate_contract["request"]["schema_ref"], "AutonomicActivateRequest")
         self.assertEqual(activate_contract["response"]["schema_ref"], "AutonomicRun")
@@ -6213,7 +6378,11 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(submit_contract["request"]["schema_ref"], "SignedEnvelope")
 
         replicate_contract = server_contract.contract_for("POST", "/mesh/artifacts/replicate")
+        self.assertEqual(replicate_contract["request"]["schema_ref"], "ArtifactReplicateRequest")
         self.assertEqual(replicate_contract["request"]["body"]["digest"], "string")
+        self.assertEqual(replicate_contract["request"]["body"]["remote_auth"], "object")
+        self.assertEqual(replicate_contract["response"]["schema_ref"], "ArtifactReplicateResponse")
+        self.assertTrue(replicate_contract["response"]["schema_available"])
 
         ack_contract = server_contract.contract_for("POST", "/mesh/notifications/n-1/ack")
         self.assertEqual(ack_contract["request"]["path"]["notification_id"], "string")
@@ -6226,7 +6395,14 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("TreatyAudit", list_protocol_schemas())
         self.assertIn("AutonomicMeshStatus", list_protocol_schemas())
         self.assertIn("AppStatus", list_protocol_schemas())
+        self.assertIn("AppStatusSample", list_protocol_schemas())
+        self.assertIn("AppHistorySampleRequest", list_protocol_schemas())
         self.assertIn("RouteProbeResult", list_protocol_schemas())
+        self.assertIn("ArtifactReplicationAuth", list_protocol_schemas())
+        self.assertIn("ArtifactReplicateRequest", list_protocol_schemas())
+        self.assertIn("ExecutionReadiness", list_protocol_schemas())
+        self.assertIn("WorkerCapacity", list_protocol_schemas())
+        self.assertIn("SetupTimelineEvent", list_protocol_schemas())
         self.assertIn("ProtocolConformanceSnapshot", list_protocol_schemas())
 
         conformance = snapshot["conformance"]
@@ -6248,6 +6424,10 @@ class SovereignMeshTests(unittest.TestCase):
         )
         self.assertIn(
             "app-status-operator-home",
+            {fixture["id"] for fixture in direct_conformance["fixtures"]},
+        )
+        self.assertIn(
+            "artifact-replicate-request-operator-mediated",
             {fixture["id"] for fixture in direct_conformance["fixtures"]},
         )
 
@@ -6677,6 +6857,9 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertIn("One app for the mesh.", markup)
         self.assertIn("OCP Today", markup)
         self.assertIn("Activate Mesh", markup)
+        self.assertIn("Run on Best Device", markup)
+        self.assertIn("Replicate Proof Artifact", markup)
+        self.assertIn("data-proof-timeline", markup)
         self.assertIn("Setup Doctor", markup)
         self.assertIn("Phone Link + QR", markup)
         self.assertIn("/mesh/app/status", markup)
@@ -6701,12 +6884,39 @@ class SovereignMeshTests(unittest.TestCase):
         self.assertEqual(app_status["node"]["node_id"], "alpha-node")
         self.assertIn("mesh_quality", app_status)
         self.assertIn("route_health", app_status)
+        self.assertIn("protocol", app_status)
+        self.assertIn("execution_readiness", app_status)
+        self.assertIn("artifact_sync", app_status)
+        self.assertIn("timeline", app_status["setup"])
         self.assertIn("latest_proof", app_status)
         self.assertIn("next_actions", app_status)
         self.assertEqual(app_status["setup"]["primary_action"], "activate_mesh")
         self.assertIn(app_status["setup"]["status"], {"ready", "local_only", "needs_attention", "proving", "strong"})
         self.assertNotIn("ocp_operator_token", app_status["setup"]["phone_url"])
         self.assertIn("/app", app_status["app_urls"]["app_url"])
+
+        sample_request = Request(
+            f"{base_url}/mesh/app/history/sample",
+            data=json.dumps({"source": "test"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(sample_request) as response:
+            sample_response = json.loads(response.read().decode("utf-8"))
+
+        self.assertEqual(sample_response["status"], "ok")
+        self.assertEqual(sample_response["sample"]["node_id"], "alpha-node")
+        self.assertGreaterEqual(sample_response["sample"]["mesh_score"], 0)
+        self.assertLessEqual(sample_response["sample"]["mesh_score"], 100)
+        self.assertNotIn("ocp_operator_token", json.dumps(sample_response["sample"], sort_keys=True))
+
+        with urlopen(f"{base_url}/mesh/app/history?limit=5") as response:
+            history = json.loads(response.read().decode("utf-8"))
+
+        self.assertEqual(history["status"], "ok")
+        self.assertEqual(history["count"], 1)
+        self.assertEqual(history["samples"][0]["node_id"], "alpha-node")
+        self.assertEqual(history["samples"][0]["setup_status"], sample_response["sample"]["setup_status"])
 
         with urlopen(f"{base_url}/app.webmanifest") as response:
             manifest = json.loads(response.read().decode("utf-8"))
@@ -6781,6 +6991,9 @@ class SovereignMeshTests(unittest.TestCase):
                 ocp_startup.operator_app_url("http://192.168.1.44:8555/", "secret token"),
                 "http://192.168.1.44:8555/app#ocp_operator_token=secret%20token",
             )
+            self.assertTrue(ocp_startup.auto_worker_enabled("full", "laptop"))
+            self.assertFalse(ocp_startup.auto_worker_enabled("light", "phone"))
+            self.assertEqual(ocp_startup.default_worker_id("Alpha Node"), "alpha-node-default-worker")
             self.assertTrue(ocp_startup.port_is_available("127.0.0.1", 0))
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.bind(("127.0.0.1", 0))
@@ -6800,6 +7013,41 @@ class SovereignMeshTests(unittest.TestCase):
             self.assertEqual(custom_profile.workspace_root, custom_db.parent / "workspace")
             self.assertTrue(custom_profile.identity_dir.exists())
             self.assertTrue(custom_profile.workspace_root.exists())
+
+    def test_server_bootstrap_auto_registers_default_worker_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args = SimpleNamespace(
+                host="127.0.0.1",
+                port=8421,
+                db_path=str(Path(tmp) / "ocp.db"),
+                workspace_root=str(Path(tmp) / "workspace"),
+                identity_dir=str(Path(tmp) / "identity"),
+                node_id="alpha-node",
+                display_name="Alpha",
+                base_url=None,
+                device_class="full",
+                execution_tier=None,
+                power_profile=None,
+                network_profile=None,
+                mobility=None,
+                form_factor="laptop",
+                agent_id="ocp-control",
+                agent_name="OCP Control Plane",
+                session_id="ocp-control-session",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {"OCP_AUTO_REGISTER_WORKER": "1", "OCP_AUTO_WORKER_ID": "alpha-auto-worker"},
+                clear=False,
+            ):
+                mesh = server._bootstrap_mesh(args)
+
+            workers = mesh.list_workers(limit=10)
+            self.assertEqual(workers["count"], 1)
+            self.assertEqual(workers["workers"][0]["id"], "alpha-auto-worker")
+            self.assertIn("shell", workers["workers"][0]["capabilities"])
+            app_status = server.build_app_status(mesh)
+            self.assertEqual(app_status["execution_readiness"]["status"], "ready")
 
     def test_desktop_launcher_builds_local_and_mesh_launch_plans(self):
         with tempfile.TemporaryDirectory() as tmp:

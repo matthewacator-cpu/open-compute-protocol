@@ -1049,16 +1049,22 @@ class GolemMeshAdapter:
 
 
 class MeshPeerClient:
-    def __init__(self, base_url: str, *, timeout: float = 8.0):
+    def __init__(self, base_url: str, *, timeout: float = 8.0, operator_token: Optional[str] = None):
         self.base_url = (base_url or "").rstrip("/")
         self.timeout = float(timeout)
+        self.operator_token = operator_token
 
     def _operator_token(self) -> str:
+        if self.operator_token is not None:
+            return str(self.operator_token or "").strip()
         return (
             os.environ.get("OCP_OPERATOR_TOKEN")
             or os.environ.get("OCP_CONTROL_TOKEN")
             or ""
         ).strip()
+
+    def with_operator_token(self, operator_token: str) -> "MeshPeerClient":
+        return MeshPeerClient(self.base_url, timeout=self.timeout, operator_token=operator_token)
 
     def _request_json(self, method: str, path: str, payload: Optional[dict] = None, params: Optional[dict] = None) -> dict:
         url = self.base_url + path
@@ -1340,12 +1346,18 @@ class MeshPeerClient:
         artifact_id: str = "",
         digest: str = "",
         pin: bool = False,
+        base_url: str = "",
+        remote_auth: Optional[dict] = None,
     ) -> dict:
         payload = {"peer_id": peer_id, "pin": bool(pin)}
         if artifact_id:
             payload["artifact_id"] = artifact_id
         if digest:
             payload["digest"] = digest
+        if base_url:
+            payload["base_url"] = base_url
+        if remote_auth:
+            payload["remote_auth"] = dict(remote_auth)
         return self._request_json("POST", "/mesh/artifacts/replicate", payload=payload)
 
     def replicate_artifact_graph(
@@ -1355,12 +1367,18 @@ class MeshPeerClient:
         artifact_id: str = "",
         digest: str = "",
         pin: bool = False,
+        base_url: str = "",
+        remote_auth: Optional[dict] = None,
     ) -> dict:
         payload = {"peer_id": peer_id, "pin": bool(pin)}
         if artifact_id:
             payload["artifact_id"] = artifact_id
         if digest:
             payload["digest"] = digest
+        if base_url:
+            payload["base_url"] = base_url
+        if remote_auth:
+            payload["remote_auth"] = dict(remote_auth)
         return self._request_json("POST", "/mesh/artifacts/replicate-graph", payload=payload)
 
     def set_artifact_pin(self, artifact_id: str, *, pinned: bool = True, reason: str = "operator_pin") -> dict:
@@ -6579,6 +6597,7 @@ class SovereignMesh:
         base_url: Optional[str] = None,
         request_id: Optional[str] = None,
         pin: bool = False,
+        remote_auth: Optional[dict] = None,
     ) -> dict:
         return self.artifacts.replicate_artifact_from_peer(
             peer_id,
@@ -6588,6 +6607,7 @@ class SovereignMesh:
             base_url=base_url,
             request_id=request_id,
             pin=pin,
+            remote_auth=remote_auth,
         )
 
     def replicate_artifact_graph_from_peer(
@@ -6600,6 +6620,7 @@ class SovereignMesh:
         base_url: Optional[str] = None,
         request_id: Optional[str] = None,
         pin: bool = False,
+        remote_auth: Optional[dict] = None,
     ) -> dict:
         return self.artifacts.replicate_artifact_graph_from_peer(
             peer_id,
@@ -6609,6 +6630,7 @@ class SovereignMesh:
             base_url=base_url,
             request_id=request_id,
             pin=pin,
+            remote_auth=remote_auth,
         )
 
     def set_artifact_pin(self, artifact_id: str, *, pinned: bool = True, reason: str = "operator_pin") -> dict:

@@ -320,6 +320,22 @@ CREATE TABLE IF NOT EXISTS mesh_autonomy_runs (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS mesh_app_status_samples (
+    id TEXT PRIMARY KEY,
+    sampled_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    node_id TEXT NOT NULL,
+    setup_status TEXT DEFAULT '',
+    mesh_score INTEGER DEFAULT 0,
+    known_peer_count INTEGER DEFAULT 0,
+    route_count INTEGER DEFAULT 0,
+    healthy_route_count INTEGER DEFAULT 0,
+    latest_proof_status TEXT DEFAULT '',
+    execution_ready_targets INTEGER DEFAULT 0,
+    local_ready_workers INTEGER DEFAULT 0,
+    artifact_verified_count INTEGER DEFAULT 0,
+    pending_approvals INTEGER DEFAULT 0,
+    payload TEXT DEFAULT '{}'
+);
 CREATE INDEX IF NOT EXISTS idx_mesh_events_created ON mesh_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mesh_remote_events_peer_created ON mesh_remote_events(peer_id, remote_seq DESC);
 CREATE INDEX IF NOT EXISTS idx_mesh_leases_peer_status ON mesh_leases(peer_id, status);
@@ -339,6 +355,7 @@ CREATE INDEX IF NOT EXISTS idx_mesh_queue_messages_dedupe ON mesh_queue_messages
 CREATE INDEX IF NOT EXISTS idx_mesh_scheduler_decisions_created ON mesh_scheduler_decisions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mesh_offload_preferences_updated ON mesh_offload_preferences(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mesh_autonomy_runs_created ON mesh_autonomy_runs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mesh_app_status_samples_node_sampled ON mesh_app_status_samples(node_id, sampled_at DESC);
 """
 
 

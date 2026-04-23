@@ -6,6 +6,10 @@ import os
 from typing import Any
 
 from server_app import build_app_manifest as _build_app_manifest, build_app_page as _build_app_page
+from server_app_history import (
+    list_app_status_history as _list_app_status_history,
+    record_app_status_sample as _record_app_status_sample,
+)
 from server_app_status import build_app_status as _build_app_status
 from server_artifacts import (
     get_artifact_from_path as _get_artifact_from_path_impl,
@@ -225,6 +229,12 @@ class OCPRouteHandlerMixin:
 
     def _handle_mesh_app_status(self):
         self._send_json(_build_app_status(self._mesh()))
+
+    def _handle_mesh_app_history(self, params):
+        self._send_json(_list_app_status_history(self._mesh(), limit=int(params.get("limit", ["240"])[0])))
+
+    def _handle_mesh_app_history_sample(self, data):
+        self._send_json(_record_app_status_sample(self._mesh(), data))
 
     def _handle_control_stream(self, params):
         _handle_control_stream_impl(self, self._mesh(), params)

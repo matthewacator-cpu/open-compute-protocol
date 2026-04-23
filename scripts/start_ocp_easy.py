@@ -141,7 +141,14 @@ def main() -> int:
         print("To share OCP with your phone or another laptop:")
         print(f"  OCP_HOST=0.0.0.0 python3 {Path(__file__).name}")
 
-    child = subprocess.Popen(command, cwd=str(repo_root))
+    env = os.environ.copy()
+    if ocp_startup.auto_worker_enabled(args.device_class, args.form_factor):
+        env.setdefault("OCP_AUTO_REGISTER_WORKER", "1")
+        env.setdefault("OCP_AUTO_WORKER_ID", ocp_startup.default_worker_id(args.node_id))
+        print()
+        print("Execution readiness:")
+        print(f"  default worker: {env['OCP_AUTO_WORKER_ID']}")
+    child = subprocess.Popen(command, cwd=str(repo_root), env=env)
     try:
         if not args.no_open_browser and wait_for_manifest(args.host, args.port, args.open_timeout):
             webbrowser.open(open_url)

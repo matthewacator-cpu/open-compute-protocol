@@ -5,6 +5,7 @@ import os
 from typing import Any
 
 from mesh import SovereignMesh
+from mesh_protocol import SCHEMA_VERSION
 
 
 def _utcnow() -> str:
@@ -79,12 +80,19 @@ def _latest_proof(missions: dict[str, Any]) -> dict[str, Any]:
         metadata = dict(mission.get("metadata") or {})
         title = str(mission.get("title") or "")
         if metadata.get("test_mission") or metadata.get("mesh_wide_test") or "mesh test" in title.lower():
+            result_ref = dict(mission.get("result_ref") or {})
+            result_bundle_ref = dict(mission.get("result_bundle_ref") or {})
             return {
                 "status": mission.get("status") or "unknown",
                 "mission_id": mission.get("id") or "",
                 "request_id": mission.get("request_id") or "",
                 "title": title or "Mesh proof",
                 "updated_at": mission.get("updated_at") or mission.get("created_at") or "",
+                "origin_peer_id": mission.get("origin_peer_id") or "",
+                "result_ref": result_ref,
+                "result_bundle_ref": result_bundle_ref,
+                "artifact_id": result_bundle_ref.get("id") or result_bundle_ref.get("artifact_id") or result_ref.get("id") or result_ref.get("artifact_id") or "",
+                "digest": result_bundle_ref.get("digest") or result_ref.get("digest") or "",
                 "summary": f"{title or 'Mesh proof'} is {mission.get('status') or 'unknown'}.",
             }
     return {
@@ -111,6 +119,90 @@ def _pending_approvals(approvals: dict[str, Any]) -> dict[str, Any]:
             f"{len(pending)} approval(s) need attention." if pending else "No approvals are waiting."
         ),
     }
+
+
+def _setup_timeline(
+    *,
+    autonomy: dict[str, Any],
+    route_health: dict[str, Any],
+    latest_proof: dict[str, Any],
+    workers: dict[str, Any],
+    artifact_sync: dict[str, Any],
+) -> list[dict[str, Any]]:
+    timeline: list[dict[str, Any]] = []
+    last_run = dict((autonomy or {}).get("last_run") or {})
+    for action in list(last_run.get("actions") or [])[-12:]:
+        action = dict(action or {})
+        kind = str(action.get("kind") or "").strip()
+        if not kind:
+            continue
+        timeline.append(
+            {
+                "kind": kind,
+                "status": str(action.get("status") or "info").strip() or "info",
+                "summary": str(action.get("summary") or kind.replace("_", " ")).strip(),
+                "peer_id": str(action.get("peer_id") or "").strip(),
+                "created_at": str(action.get("created_at") or "").strip(),
+                "details": dict(action.get("details") or {}),
+            }
+        )
+
+    if not any(item["kind"] == "route_verified" for item in timeline) and int(route_health.get("healthy") or 0):
+        timeline.append(
+            {
+                "kind": "route_verified",
+                "status": "ok",
+                "summary": f"{int(route_health.get('healthy') or 0)} peer route(s) are fresh and reachable.",
+                "peer_id": "",
+                "created_at": "",
+                "details": {"healthy": int(route_health.get("healthy") or 0)},
+            }
+        )
+    if not any(item["kind"] == "worker_ready" for item in timeline) and int(workers.get("count") or 0):
+        timeline.append(
+            {
+                "kind": "worker_ready",
+                "status": "ok",
+                "summary": f"{int(workers.get('count') or 0)} local worker(s) are advertising capacity.",
+                "peer_id": "",
+                "created_at": "",
+                "details": {"count": int(workers.get("count") or 0)},
+            }
+        )
+    if not any(item["kind"] == "artifact_verified" for item in timeline) and int(artifact_sync.get("verified_count") or 0):
+        timeline.append(
+            {
+                "kind": "artifact_verified",
+                "status": "ok",
+                "summary": f"{int(artifact_sync.get('verified_count') or 0)} replicated artifact(s) have mirror verification.",
+                "peer_id": "",
+                "created_at": str(artifact_sync.get("latest_synced_at") or ""),
+                "details": {"verified_count": int(artifact_sync.get("verified_count") or 0)},
+            }
+        )
+    if latest_proof.get("status") == "completed" and not any(item["kind"] == "proof_completed" for item in timeline):
+        timeline.append(
+            {
+                "kind": "proof_completed",
+                "status": "ok",
+                "summary": latest_proof.get("summary") or "Whole-mesh proof completed.",
+                "peer_id": "",
+                "created_at": str(latest_proof.get("updated_at") or ""),
+                "details": {"mission_id": latest_proof.get("mission_id") or ""},
+            }
+        )
+    if not timeline:
+        timeline.append(
+            {
+                "kind": "setup_checked",
+                "status": "ready",
+                "summary": "Setup Doctor is ready. Press Activate Mesh to discover, repair, enlist, and prove.",
+                "peer_id": "",
+                "created_at": "",
+                "details": {},
+            }
+        )
+    return timeline[-8:]
 
 
 def _next_actions(
@@ -160,6 +252,7 @@ def _setup_projection(
     latest_proof: dict[str, Any],
     autonomy: dict[str, Any],
     app_urls: dict[str, Any],
+    timeline: list[dict[str, Any]],
 ) -> dict[str, Any]:
     sharing_mode = str(connectivity.get("sharing_mode") or "").strip().lower()
     token_configured = _configured_operator_token()
@@ -239,6 +332,146 @@ def _setup_projection(
         "blocking_issue": blocking_issue,
         "next_fix": next_fix,
         "operator_summary": operator_summary,
+        "timeline": timeline,
+    }
+
+
+def _worker_capacity(worker: dict[str, Any]) -> dict[str, Any]:
+    max_jobs = max(1, int(worker.get("max_concurrent_jobs") or 1))
+    active = max(0, int(worker.get("active_attempts") or 0))
+    available = max(0, max_jobs - active)
+    return {
+        "worker_id": worker.get("id") or "",
+        "peer_id": worker.get("peer_id") or "",
+        "status": worker.get("status") or "unknown",
+        "capabilities": list(worker.get("capabilities") or []),
+        "resources": dict(worker.get("resources") or {}),
+        "max_concurrent_jobs": max_jobs,
+        "available_slots": available,
+        "operator_summary": (
+            f"{worker.get('id') or 'Worker'} has {available} available slot(s)."
+            if str(worker.get("status") or "").lower() in {"active", "ready"}
+            else f"{worker.get('id') or 'Worker'} is {worker.get('status') or 'unknown'}."
+        ),
+    }
+
+
+def _execution_readiness(
+    *,
+    mesh: SovereignMesh,
+    workers: dict[str, Any],
+    peers: dict[str, Any],
+    route_health: dict[str, Any],
+) -> dict[str, Any]:
+    local_workers = [_worker_capacity(dict(worker or {})) for worker in list(workers.get("workers") or [])]
+    local_ready = [worker for worker in local_workers if worker["status"] in {"active", "ready"} and worker["available_slots"] > 0]
+    route_by_peer = {
+        str(route.get("peer_id") or "").strip(): dict(route or {})
+        for route in list(route_health.get("routes") or [])
+        if str(route.get("peer_id") or "").strip()
+    }
+    targets = [
+        {
+            "peer_id": getattr(mesh, "node_id", "local"),
+            "display_name": getattr(mesh, "display_name", "This node"),
+            "role": "local",
+            "status": "ready" if local_ready else "no_worker_capacity",
+            "worker_count": len(local_workers),
+            "reasons": ["local worker registered"] if local_ready else ["no local worker capacity advertised"],
+        }
+    ]
+    remote_ready = 0
+    for peer in list(peers.get("peers") or []):
+        peer = dict(peer or {})
+        peer_id = str(peer.get("peer_id") or "").strip()
+        metadata = dict(peer.get("metadata") or {})
+        remote_workers = list(metadata.get("remote_workers") or [])
+        route = route_by_peer.get(peer_id, {})
+        route_ready = (
+            str(route.get("status") or "").lower() == "reachable"
+            and str(route.get("freshness") or "").lower() in {"fresh", "aging"}
+        )
+        worker_ready = any(str(worker.get("status") or "").lower() in {"active", "ready"} for worker in remote_workers)
+        if route_ready and worker_ready:
+            remote_ready += 1
+        reasons = []
+        reasons.append("fresh route" if route_ready else "route not proven")
+        reasons.append("worker advertised" if worker_ready else "no worker advertised")
+        targets.append(
+            {
+                "peer_id": peer_id,
+                "display_name": peer.get("display_name") or peer_id,
+                "role": "remote",
+                "status": "ready" if route_ready and worker_ready else "needs_attention",
+                "worker_count": len(remote_workers),
+                "route_status": route.get("status") or "",
+                "route_freshness": route.get("freshness") or "",
+                "reasons": reasons,
+            }
+        )
+    if local_ready or remote_ready:
+        status = "ready"
+        summary = f"Execution is ready: {len(local_ready)} local worker(s), {remote_ready} remote peer target(s)."
+    elif targets:
+        status = "needs_worker"
+        summary = "Routes may be present, but no ready worker capacity is advertised yet."
+    else:
+        status = "isolated"
+        summary = "No execution targets are visible yet."
+    return {
+        "status": status,
+        "local": {"worker_count": len(local_workers), "ready_worker_count": len(local_ready)},
+        "targets": targets,
+        "worker_capacity": local_workers,
+        "operator_summary": summary,
+    }
+
+
+def _artifact_sync(mesh: SovereignMesh) -> dict[str, Any]:
+    artifacts = dict(_safe({"artifacts": [], "count": 0}, mesh.list_artifacts, limit=25))
+    synced = []
+    verified_count = 0
+    latest_synced_at = ""
+    for artifact in list(artifacts.get("artifacts") or []):
+        metadata = dict(artifact.get("metadata") or {})
+        sync = dict(metadata.get("artifact_sync") or {})
+        if not sync:
+            continue
+        synced.append(
+            {
+                "artifact_id": artifact.get("id") or "",
+                "digest": artifact.get("digest") or "",
+                "source_peer_id": sync.get("source_peer_id") or "",
+                "verification_status": sync.get("verification_status") or "",
+                "pinned": bool(sync.get("pinned") or artifact.get("pinned")),
+                "synced_at": sync.get("synced_at") or artifact.get("created_at") or "",
+                "remote_auth": sync.get("remote_auth") or {"type": "none", "status": "not_used"},
+            }
+        )
+        if str(sync.get("verification_status") or "").lower() == "verified":
+            verified_count += 1
+        latest_synced_at = max(latest_synced_at, str(sync.get("synced_at") or ""))
+    return {
+        "status": "verified" if verified_count else ("none" if not synced else "attention"),
+        "replicated_count": len(synced),
+        "verified_count": verified_count,
+        "latest_synced_at": latest_synced_at,
+        "items": synced[:5],
+        "operator_summary": (
+            f"{verified_count} replicated artifact(s) verified."
+            if verified_count
+            else "No replicated artifacts have been verified yet."
+        ),
+    }
+
+
+def _protocol_status(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "release": manifest.get("protocol_release") or "0.1",
+        "version": manifest.get("protocol_version") or "",
+        "schema_version": SCHEMA_VERSION,
+        "contract_url": "/mesh/contract",
+        "operator_summary": "The live /mesh contract includes protocol schemas for app status, route health, execution readiness, and artifact replication.",
     }
 
 
@@ -258,12 +491,27 @@ def build_app_status(mesh: SovereignMesh) -> dict[str, Any]:
     connectivity = dict(_safe({"status": "unknown", "lan_urls": [], "share_advice": ""}, mesh.connectivity_diagnostics, limit=24))
     peers = dict(_safe({"peers": [], "count": 0}, mesh.list_peers, limit=12))
     missions = dict(_safe({"missions": []}, mesh.list_missions, limit=12))
+    workers = dict(_safe({"workers": [], "count": 0}, mesh.list_workers, limit=24))
     approvals_raw = dict(_safe({"approvals": []}, mesh.list_approvals, limit=12, status="pending"))
     latest_proof = _latest_proof(missions)
     approvals = _pending_approvals(approvals_raw)
     mesh_quality = _mesh_quality(autonomic, peers)
     app_urls = _app_urls(mesh, connectivity)
     route_health = autonomic.get("routes") or {"routes": [], "count": 0, "healthy": 0}
+    artifact_sync = _artifact_sync(mesh)
+    execution_readiness = _execution_readiness(
+        mesh=mesh,
+        workers=workers,
+        peers=peers,
+        route_health=route_health,
+    )
+    timeline = _setup_timeline(
+        autonomy=autonomic,
+        route_health=route_health,
+        latest_proof=latest_proof,
+        workers=workers,
+        artifact_sync=artifact_sync,
+    )
     setup = _setup_projection(
         mesh_quality=mesh_quality,
         route_health=route_health,
@@ -272,12 +520,14 @@ def build_app_status(mesh: SovereignMesh) -> dict[str, Any]:
         latest_proof=latest_proof,
         autonomy=autonomic,
         app_urls=app_urls,
+        timeline=timeline,
     )
     return {
         "status": "ok",
         "node": _node_summary(mesh, manifest),
         "app_urls": app_urls,
         "mesh_quality": mesh_quality,
+        "protocol": _protocol_status(manifest),
         "setup": setup,
         "autonomy": {
             "status": autonomic.get("status") or "unknown",
@@ -286,6 +536,8 @@ def build_app_status(mesh: SovereignMesh) -> dict[str, Any]:
             "last_run": autonomic.get("last_run") or {},
         },
         "route_health": route_health,
+        "execution_readiness": execution_readiness,
+        "artifact_sync": artifact_sync,
         "latest_proof": latest_proof,
         "approvals": approvals,
         "next_actions": _next_actions(autonomic, connectivity, approvals, latest_proof),

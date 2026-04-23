@@ -77,7 +77,9 @@ def replicate_artifact(mesh: SovereignMesh, data: dict[str, Any]) -> dict[str, A
         (data.get("peer_id") or "").strip(),
         artifact_id=(data.get("artifact_id") or "").strip(),
         digest=(data.get("digest") or "").strip(),
+        base_url=(data.get("base_url") or "").strip() or None,
         pin=bool(data.get("pin", False)),
+        remote_auth=dict(data.get("remote_auth") or {}),
     )
 
 
@@ -86,7 +88,9 @@ def replicate_artifact_graph(mesh: SovereignMesh, data: dict[str, Any]) -> dict[
         (data.get("peer_id") or "").strip(),
         artifact_id=(data.get("artifact_id") or "").strip(),
         digest=(data.get("digest") or "").strip(),
+        base_url=(data.get("base_url") or "").strip() or None,
         pin=bool(data.get("pin", False)),
+        remote_auth=dict(data.get("remote_auth") or {}),
     )
 
 
