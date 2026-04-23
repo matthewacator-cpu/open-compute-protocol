@@ -30,12 +30,14 @@ identities/
 *.log
 logs/
 tmp/
+dist/
 *.tmp
 *.pid
 *.out
 *.err
 
 # Python tooling caches
+.build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

@@ -11,6 +11,7 @@ DEFAULT_BUNDLE_ID = "org.opencomputeprotocol.ocp"
 
 EXCLUDED_DIR_NAMES = {
     ".git",
+    ".build",
     ".local",
     ".mypy_cache",
     ".pytest_cache",
