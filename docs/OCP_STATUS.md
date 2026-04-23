@@ -12,7 +12,7 @@ Related planning docs:
 ## Current framing
 
 - `OCP v0.1` = protocol/spec draft
-- `v0.1.4` = current Desktop Alpha RC implementation release
+- `v0.1.6` = current protocol-first Desktop Alpha implementation release
 - `Sovereign Mesh` = current Python-first reference implementation
 - `sovereign-mesh/v1` = current wire version
 
@@ -58,6 +58,8 @@ Related planning docs:
 - Pinning-aware artifact policy so replicated artifacts can be held durably across purge windows
 - Graph-aware replication for OCI result bundles and checkpoint-linked attempt artifact sets
 - Pull-through sync of linked subject, config, attestation, log, and checkpoint artifacts from bundle roots
+- Operator-mediated private artifact replication through explicit redacted `remote_auth` so proof artifacts can move without storing remote operator tokens
+- Fresh route proof is required before remote artifact replication, with explicit base URLs probed before use
 - First-class device profiles for `full`, `light`, `micro`, and `relay` nodes with durable local profile state
 - Device-profile-aware peer manifests, stream snapshots, and peer registry surfaces for phones, watches, relays, and heavier compute nodes
 - Device-aware scheduler inputs for preferred and required device classes, stable-network requirements, battery avoidance, and artifact-mirror-capable placement
@@ -73,8 +75,15 @@ Related planning docs:
 - First operator-grade `Connect Devices` flow in the control deck with nearby scan, one-click connect, built-in reachability diagnostics, and one-click test missions
 - New unified OCP app shell at `GET /` and `GET /app` so phone and desktop operators get setup, control, and protocol inspection in one surface
 - App home now includes a `Today` panel with mesh strength, Autonomic Mesh activation, latest proof state, next actions, phone link/QR, and route-health summaries
+- App home now includes a Proof Timeline plus “Run on Best Device” and “Replicate Proof Artifact” actions backed by scheduler and artifact services
 - Compact app status API at `GET /mesh/app/status` so product surfaces can render operator state without scraping the advanced cockpit
+- App status now exposes protocol schema status, execution readiness, artifact sync, and setup timeline projections for launchers and phone UI
+- App history now persists normalized app-status samples for native Mission Control charts at `GET /mesh/app/history` and `POST /mesh/app/history/sample`
 - Mac-first beta desktop launcher with Local Only and Mesh Mode starts, Application Support state defaults, live status, app opening, and phone/LAN link copy
+- Native SwiftPM Mac app target `OCPDesktop` with a SwiftUI Mission Control shell around the existing OCP server
+- Native Mission Control pages cover overview charts, guided setup, client-derived route topology, route health, execution readiness, artifact sync, protocol links, and settings
+- Unsigned native SwiftPM bundle builder at `python3 scripts/build_swift_macos_app.py`
+- Easy startup and the Mac launcher can auto-advertise a default full-node worker for laptop/workstation demos
 - Unsigned macOS beta bundle builder at `python3 scripts/build_macos_app.py` that excludes local state, identities, databases, git metadata, caches, and test artifacts
 - Plain-language easy setup remains available at `GET /easy` so first-run pairing can stay friendly while `/control` remains the advanced cockpit module
 - Easy setup share-link copy and plain troubleshooting guidance so nearby pairing can fall back to “copy this link to the other computer” instead of terminal instructions
@@ -177,6 +186,8 @@ Related planning docs:
 - Unified OCP app: `GET /`
 - Installable app shell: `GET /app`
 - App status: `GET /mesh/app/status`
+- App history: `GET /mesh/app/history`
+- App history sample: `POST /mesh/app/history/sample`
 - App manifest: `GET /app.webmanifest`
 - Autonomic status: `GET /mesh/autonomy/status`
 - Autonomic activation: `POST /mesh/autonomy/activate`
@@ -244,6 +255,7 @@ Related planning docs:
 - Helper autonomy run: `POST /mesh/helpers/autonomy/run`
 
 `/mesh/contract` now exposes the grouped route contract, reusable protocol schema registry, and schema refs used by the first lightweight ingress validation path.
+The contract includes additive schemas for operator-mediated artifact replication, route proof freshness, execution readiness, worker capacity, and setup timeline events.
 - Secret list: `GET /mesh/secrets`
 - Secret put: `POST /mesh/secrets/put`
 - Worker heartbeat: `POST /mesh/workers/{worker_id}/heartbeat`
@@ -255,8 +267,8 @@ Related planning docs:
 - Artifact list: `GET /mesh/artifacts`
 - Artifact fetch: `GET /mesh/artifacts/{artifact_id}`
 - Artifact publish: `POST /mesh/artifacts/publish`
-- Artifact replicate: `POST /mesh/artifacts/replicate`
-- Artifact graph replicate: `POST /mesh/artifacts/replicate-graph`
+- Artifact replicate: `POST /mesh/artifacts/replicate` with optional `remote_auth: {type: "operator_token", token: "..."}` for explicit private remote pulls
+- Artifact graph replicate: `POST /mesh/artifacts/replicate-graph` with the same redacted operator-mediated auth shape
 - Artifact pin: `POST /mesh/artifacts/pin`
 - Artifact mirror verify: `POST /mesh/artifacts/verify-mirror`
 - Artifact purge: `POST /mesh/artifacts/purge`
@@ -265,7 +277,7 @@ Related planning docs:
 ## Recommended next OCP builds
 
 1. Add signed/notarized packaging, tray presence, startup defaults, and deeper firewall prompts after the unsigned Mac beta launcher proves the flow.
-2. Add a mission launch helper in the control surface so operators can create single-job or cooperative missions without dropping to raw JSON.
+2. Replace operator-mediated artifact pulls with signed scoped delegation grants once the capability-law layer is ready.
 
 ## Broader roadmap
 
@@ -280,4 +292,4 @@ python3 -m unittest tests.test_sovereign_mesh
 ```
 
 Current standalone baseline:
-- `tests.test_sovereign_mesh`: 187 tests passing
+- `tests.test_sovereign_mesh`: 189 tests passing

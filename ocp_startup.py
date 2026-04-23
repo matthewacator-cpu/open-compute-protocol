@@ -144,6 +144,16 @@ def operator_app_url(base_url: str, operator_token: str = "", *, path: str = "/a
     return f"{url}#ocp_operator_token={urllib.parse.quote(token, safe='')}"
 
 
+def auto_worker_enabled(device_class: str, form_factor: str) -> bool:
+    device = str(device_class or "").strip().lower()
+    form = str(form_factor or "").strip().lower()
+    return device == "full" and form not in {"phone", "watch", "tablet"}
+
+
+def default_worker_id(node_id: str) -> str:
+    return f"{slugify(node_id or default_node_id()) or 'ocp'}-default-worker"
+
+
 def health_url(host: str, port: int) -> str:
     return build_open_url(host, port, "/mesh/manifest")
 
@@ -325,9 +335,11 @@ __all__ = [
     "default_launcher_support_dir",
     "default_node_id",
     "default_repo_state_dir",
+    "default_worker_id",
     "discover_local_ipv4_addresses",
     "display_host_for_browser",
     "ensure_state_paths",
+    "auto_worker_enabled",
     "health_url",
     "is_loopback_host",
     "is_wildcard_host",

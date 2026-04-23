@@ -32,8 +32,8 @@ def build_app_manifest(mesh: SovereignMesh) -> dict[str, Any]:
         "start_url": "/app",
         "scope": "/",
         "display": "standalone",
-        "background_color": "#f7f0e6",
-        "theme_color": "#112437",
+        "background_color": "#071217",
+        "theme_color": "#071217",
         "categories": ["productivity", "utilities"],
     }
 
@@ -55,7 +55,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#112437">
+  <meta name="theme-color" content="#071217">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="OCP">
@@ -64,15 +64,15 @@ def build_app_page(mesh: SovereignMesh) -> str:
   <title>OCP App</title>
   <style>
     :root {{
-      --ink: #132132;
-      --muted: #5f6875;
-      --paper: #fffaf3;
-      --paper-strong: #fffdf8;
-      --line: rgba(19, 33, 50, 0.13);
-      --blue: #0c5c78;
-      --green: #1d7d58;
-      --gold: #a86c24;
-      --shadow: 0 24px 70px rgba(45, 33, 18, 0.16);
+      --ink: #ecf4f6;
+      --muted: #91a8af;
+      --paper: rgba(8, 16, 22, 0.92);
+      --paper-strong: rgba(13, 25, 30, 0.96);
+      --line: rgba(104, 242, 167, 0.14);
+      --blue: #58c4f5;
+      --green: #68f2a7;
+      --gold: #f6b35f;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
     }}
     * {{ box-sizing: border-box; }}
     html {{ scroll-behavior: smooth; }}
@@ -82,9 +82,10 @@ def build_app_page(mesh: SovereignMesh) -> str:
       color: var(--ink);
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:
-        radial-gradient(circle at 12% 6%, rgba(168, 108, 36, 0.18), transparent 25%),
-        radial-gradient(circle at 88% 0%, rgba(12, 92, 120, 0.16), transparent 28%),
-        linear-gradient(180deg, #fff8ec 0%, #f2eadf 100%);
+        radial-gradient(circle at 12% 6%, rgba(246, 179, 95, 0.13), transparent 24%),
+        radial-gradient(circle at 88% 0%, rgba(88, 196, 245, 0.18), transparent 28%),
+        radial-gradient(circle at 72% 22%, rgba(104, 242, 167, 0.14), transparent 26%),
+        linear-gradient(180deg, #071217 0%, #08161a 46%, #0d1713 100%);
     }}
     a {{ color: inherit; }}
     button {{ font: inherit; }}
@@ -101,7 +102,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       margin-bottom: 16px;
     }}
     .panel {{
-      background: rgba(255, 250, 243, 0.9);
+      background: rgba(8, 16, 22, 0.84);
       border: 1px solid var(--line);
       border-radius: 28px;
       box-shadow: var(--shadow);
@@ -124,7 +125,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
     }}
     .eyebrow {{
       margin: 0 0 12px;
-      color: var(--blue);
+      color: var(--green);
       font-size: 0.78rem;
       font-weight: 800;
       letter-spacing: 0.14em;
@@ -136,6 +137,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       font-size: clamp(2.25rem, 8vw, 5.75rem);
       line-height: 0.88;
       letter-spacing: -0.08em;
+      color: #f6f1dd;
     }}
     .lead {{
       max-width: 760px;
@@ -164,15 +166,16 @@ def build_app_page(mesh: SovereignMesh) -> str:
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 8px 10px;
-      background: rgba(255, 255, 255, 0.58);
-      color: #24364a;
+      background: rgba(255, 255, 255, 0.05);
+      color: #d8eceb;
       font-size: 0.82rem;
       font-weight: 700;
     }}
     .install {{
       border-radius: 20px;
       padding: 14px;
-      background: #112437;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid rgba(104, 242, 167, 0.12);
       color: #fff9ed;
     }}
     .install strong {{ display: block; margin-bottom: 4px; }}
@@ -188,23 +191,23 @@ def build_app_page(mesh: SovereignMesh) -> str:
       margin-bottom: 14px;
       border: 1px solid var(--line);
       border-radius: 24px;
-      background: rgba(255, 250, 243, 0.88);
+      background: rgba(10, 16, 22, 0.86);
       backdrop-filter: blur(18px);
-      box-shadow: 0 18px 40px rgba(45, 33, 18, 0.12);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
     }}
     .tab {{
       min-height: 48px;
       border: 0;
       border-radius: 16px;
       background: transparent;
-      color: #34455a;
+      color: #aac2ca;
       font-weight: 800;
       cursor: pointer;
     }}
     .tab[aria-selected="true"] {{
-      color: #fff9ed;
-      background: linear-gradient(135deg, #112437, #0c5c78);
-      box-shadow: 0 10px 22px rgba(12, 92, 120, 0.22);
+      color: #061015;
+      background: linear-gradient(135deg, var(--green), var(--blue));
+      box-shadow: 0 10px 22px rgba(88, 196, 245, 0.20);
     }}
     .module {{
       display: none;
@@ -223,7 +226,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
     .today-card {{
       border: 1px solid var(--line);
       border-radius: 24px;
-      background: rgba(255, 253, 248, 0.76);
+      background: rgba(10, 18, 24, 0.84);
       padding: 18px;
     }}
     .today-card h2,
@@ -244,7 +247,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 14px;
-      background: rgba(255, 255, 255, 0.56);
+      background: rgba(255, 255, 255, 0.05);
     }}
     .mesh-stat span {{
       display: block;
@@ -258,6 +261,34 @@ def build_app_page(mesh: SovereignMesh) -> str:
       display: block;
       margin-top: 8px;
       font-size: 1.65rem;
+      color: #f2f7f7;
+    }}
+    .meta-strip {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 18px 0 0;
+    }}
+    .meta-chip {{
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.04);
+    }}
+    .meta-chip span {{
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }}
+    .meta-chip strong {{
+      display: block;
+      margin-top: 8px;
+      font-size: 1rem;
+      line-height: 1.35;
+      color: #f5f9f9;
     }}
     .primary-action {{
       display: inline-flex;
@@ -275,8 +306,8 @@ def build_app_page(mesh: SovereignMesh) -> str:
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 13px 16px;
-      background: rgba(255, 255, 255, 0.74);
-      color: var(--blue);
+      background: rgba(255, 255, 255, 0.05);
+      color: #dbeef0;
       font-weight: 900;
       cursor: pointer;
       text-decoration: none;
@@ -298,17 +329,76 @@ def build_app_page(mesh: SovereignMesh) -> str:
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.55);
-      color: #2a3c50;
+      background: rgba(255, 255, 255, 0.04);
+      color: #d7eaee;
       line-height: 1.35;
     }}
+    .story-stack {{
+      margin-top: 16px;
+      display: grid;
+      gap: 10px;
+    }}
+    .story-line {{
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.04);
+    }}
+    .story-line::before {{
+      content: "";
+      width: 10px;
+      height: 10px;
+      margin-top: 6px;
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 0 0 5px rgba(104, 242, 167, 0.12);
+    }}
+    .proof-timeline {{
+      margin-top: 14px;
+      display: grid;
+      gap: 8px;
+    }}
+    .timeline-item {{
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.04);
+    }}
+    .timeline-dot {{
+      width: 12px;
+      height: 12px;
+      margin-top: 4px;
+      border-radius: 999px;
+      background: var(--gold);
+      box-shadow: 0 0 0 5px rgba(168, 108, 36, 0.12);
+    }}
+    .timeline-item[data-status="ok"] .timeline-dot,
+    .timeline-item[data-status="completed"] .timeline-dot {{
+      background: var(--green);
+      box-shadow: 0 0 0 5px rgba(29, 125, 88, 0.12);
+    }}
+    .timeline-item[data-status="failed"] .timeline-dot,
+    .timeline-item[data-status="warning"] .timeline-dot {{
+      background: #c84332;
+      box-shadow: 0 0 0 5px rgba(200, 67, 50, 0.12);
+    }}
+    .timeline-item strong {{ display: block; font-size: 0.92rem; }}
+    .timeline-item span {{ display: block; color: var(--muted); font-size: 0.9rem; line-height: 1.35; }}
     .phone-link {{
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 12px;
-      background: rgba(255,255,255,0.7);
-      color: #24364a;
+      background: rgba(255,255,255,0.04);
+      color: #e8f2f2;
       overflow-wrap: anywhere;
       font-weight: 800;
     }}
@@ -316,9 +406,9 @@ def build_app_page(mesh: SovereignMesh) -> str:
       min-height: 170px;
       display: grid;
       place-items: center;
-      border: 1px dashed rgba(19, 33, 50, 0.24);
+      border: 1px dashed rgba(104, 242, 167, 0.24);
       border-radius: 20px;
-      background: rgba(255, 255, 255, 0.46);
+      background: rgba(255, 255, 255, 0.03);
       margin-top: 12px;
       overflow: hidden;
     }}
@@ -326,6 +416,48 @@ def build_app_page(mesh: SovereignMesh) -> str:
       width: 156px;
       height: 156px;
       border-radius: 12px;
+    }}
+    .peer-stage {{
+      margin-top: 18px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+    }}
+    .peer-stage h3 {{
+      margin: 0 0 8px;
+      font-size: 1.2rem;
+    }}
+    .peer-stage p {{
+      margin: 0;
+    }}
+    .role-wall {{
+      margin-top: 14px;
+      display: grid;
+      gap: 10px;
+    }}
+    .role-pill {{
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.04);
+    }}
+    .role-pill strong {{
+      display: block;
+      margin-bottom: 4px;
+    }}
+    .role-pill span {{
+      display: block;
+      color: var(--muted);
+      line-height: 1.4;
+    }}
+    .route-list-head {{
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }}
+    .route-list-head span {{
+      color: var(--muted);
+      font-size: 0.92rem;
     }}
     .route-list {{
       display: grid;
@@ -336,7 +468,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 10px 12px;
-      background: rgba(255,255,255,0.55);
+      background: rgba(255,255,255,0.04);
     }}
     .route-item strong {{ display: block; }}
     .route-item span {{ color: var(--muted); font-size: 0.9rem; }}
@@ -347,7 +479,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       align-items: center;
       padding: 16px 18px;
       border-bottom: 1px solid var(--line);
-      background: rgba(255, 253, 248, 0.8);
+      background: rgba(255, 255, 255, 0.03);
     }}
     .module-head h2 {{ margin: 0; font-size: 1.1rem; }}
     .module-head p {{ margin: 4px 0 0; color: var(--muted); font-size: 0.92rem; }}
@@ -358,9 +490,9 @@ def build_app_page(mesh: SovereignMesh) -> str:
       justify-content: center;
       border-radius: 999px;
       padding: 10px 12px;
-      background: #fff;
+      background: rgba(255,255,255,0.04);
       border: 1px solid var(--line);
-      color: var(--blue);
+      color: #eaf6f8;
       font-size: 0.88rem;
       font-weight: 800;
       text-decoration: none;
@@ -370,7 +502,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       width: 100%;
       min-height: 76vh;
       border: 0;
-      background: #fffaf3;
+      background: #081217;
     }}
     .protocol-grid {{
       display: grid;
@@ -383,7 +515,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       padding: 18px;
       border: 1px solid var(--line);
       border-radius: 22px;
-      background: rgba(255, 253, 248, 0.8);
+      background: rgba(255, 255, 255, 0.04);
       text-decoration: none;
     }}
     .protocol-card span {{
@@ -426,7 +558,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       padding: 14px;
       border-radius: 18px;
       border: 1px solid var(--line);
-      background: #101b2a;
+      background: #071217;
       color: #e9f3ff;
       font-size: 0.78rem;
       line-height: 1.5;
@@ -439,6 +571,7 @@ def build_app_page(mesh: SovereignMesh) -> str:
       .open-link {{ width: 100%; }}
       .today-grid {{ grid-template-columns: 1fr; }}
       .mesh-state {{ grid-template-columns: 1fr; }}
+      .meta-strip {{ grid-template-columns: 1fr; }}
       .protocol-grid {{ grid-template-columns: 1fr; }}
       iframe {{ min-height: 72vh; }}
     }}
@@ -486,6 +619,20 @@ def build_app_page(mesh: SovereignMesh) -> str:
           <p class="eyebrow">Setup Doctor</p>
           <h2 data-app-quality-label>Local node ready</h2>
           <p data-app-summary>Loading local mesh status...</p>
+          <div class="meta-strip" aria-label="Recovery, blocker, and primary peer">
+            <div class="meta-chip">
+              <span>Recovery</span>
+              <strong data-app-recovery-state>healthy</strong>
+            </div>
+            <div class="meta-chip">
+              <span>Blocker</span>
+              <strong data-app-blocker-code>none</strong>
+            </div>
+            <div class="meta-chip">
+              <span>Primary peer</span>
+              <strong data-app-primary-peer-inline>No remote peer yet</strong>
+            </div>
+          </div>
           <div class="mesh-state" aria-label="Mesh status metrics">
             <div class="mesh-stat">
               <span>Peers</span>
@@ -500,25 +647,41 @@ def build_app_page(mesh: SovereignMesh) -> str:
               <strong data-app-proof-status>none</strong>
             </div>
           </div>
+          <div class="story-stack" data-story-lines>
+            <div class="story-line">Press Activate Mesh to discover, repair, enlist, prove, and explain this mesh.</div>
+          </div>
           <div class="today-actions">
             <button class="primary-action" type="button" data-activate-autonomic>Activate Mesh</button>
+            <button class="secondary-action" type="button" data-run-best-device>Run on Best Device</button>
+            <button class="secondary-action" type="button" data-replicate-proof-artifact>Replicate Proof Artifact</button>
             <button class="secondary-action" type="button" data-refresh-status>Refresh</button>
             <a class="secondary-action" href="/mesh/app/status" target="_blank" rel="noreferrer">Inspect App Status</a>
           </div>
           <ul class="next-actions" data-next-actions>
             <li>Press Activate Mesh to discover, repair, enlist, prove, and explain this mesh.</li>
           </ul>
+          <div class="proof-timeline" data-proof-timeline aria-label="Proof timeline"></div>
         </div>
         <aside class="today-card">
           <p class="eyebrow">Phone Link + QR</p>
-          <h3>Open this mesh on your phone</h3>
-          <p>Start Mesh Mode on the desktop launcher, then use this LAN link from your phone on the same Wi-Fi.</p>
+          <h3>Mission Control on your phone</h3>
+          <p>Open the same trusted mesh story on your phone, then use this LAN link from the same Wi-Fi.</p>
           <div class="phone-link" data-phone-link>/app</div>
           <div class="today-actions" style="margin-top: 10px;">
             <button class="secondary-action" type="button" data-copy-phone-link>Copy Phone Link</button>
             <a class="secondary-action" href="/easy">Open Setup QR</a>
           </div>
           <div class="qr-frame" data-phone-qr>QR appears when a LAN phone link is available.</div>
+          <div class="peer-stage">
+            <p class="eyebrow">Primary Peer</p>
+            <h3 data-primary-peer-label>No remote peer yet</h3>
+            <p data-primary-peer-summary>Connect another trusted device to build the mesh.</p>
+          </div>
+          <div class="role-wall" data-device-roles></div>
+          <div class="route-list-head">
+            <p class="eyebrow">Route health</p>
+            <span>Fresh, stale, and repaired peer paths.</span>
+          </div>
           <div class="route-list" data-route-list></div>
         </aside>
       </div>
@@ -597,16 +760,25 @@ def build_app_page(mesh: SovereignMesh) -> str:
     const appEls = {{
       quality: document.querySelector("[data-app-quality-label]"),
       summary: document.querySelector("[data-app-summary]"),
+      recovery: document.querySelector("[data-app-recovery-state]"),
+      blockerCode: document.querySelector("[data-app-blocker-code]"),
+      primaryPeerInline: document.querySelector("[data-app-primary-peer-inline]"),
       peers: document.querySelector("[data-app-peer-count]"),
       routes: document.querySelector("[data-app-route-count]"),
       proof: document.querySelector("[data-app-proof-status]"),
+      story: document.querySelector("[data-story-lines]"),
       actions: document.querySelector("[data-next-actions]"),
       phone: document.querySelector("[data-phone-link]"),
       qr: document.querySelector("[data-phone-qr]"),
-      routeList: document.querySelector("[data-route-list]")
+      primaryPeerLabel: document.querySelector("[data-primary-peer-label]"),
+      primaryPeerSummary: document.querySelector("[data-primary-peer-summary]"),
+      deviceRoles: document.querySelector("[data-device-roles]"),
+      routeList: document.querySelector("[data-route-list]"),
+      timeline: document.querySelector("[data-proof-timeline]")
     }};
 
     const text = (value, fallback = "") => String(value || fallback || "");
+    const humanize = (value) => text(value, "unknown").replace(/_/g, " ").replace(/\\b\\w/g, (match) => match.toUpperCase());
     const setText = (node, value) => {{
       if (node) node.textContent = value;
     }};
@@ -632,21 +804,85 @@ def build_app_page(mesh: SovereignMesh) -> str:
       const routeHealth = payload.route_health || {{}};
       const proof = payload.latest_proof || {{}};
       const urls = payload.app_urls || {{}};
+      const primaryPeer = setup.primary_peer || {{}};
+      const story = Array.isArray(setup.story) ? setup.story.filter((line) => String(line || "").trim()) : [];
       setText(appEls.quality, text(setup.label || quality.label, "Local node ready"));
-      setText(appEls.summary, text(setup.operator_summary || quality.operator_summary || (payload.autonomy || {{}}).operator_summary, "Press Activate Mesh to discover, repair, enlist, prove, and explain this mesh."));
+      setText(appEls.summary, text(setup.operator_summary || story[0] || quality.operator_summary || (payload.autonomy || {{}}).operator_summary, "Press Activate Mesh to discover, repair, enlist, prove, and explain this mesh."));
+      setText(appEls.recovery, humanize(text(setup.recovery_state, "healthy")));
+      setText(appEls.blockerCode, text(setup.blocker_code ? humanize(setup.blocker_code) : "none"));
+      setText(appEls.primaryPeerInline, text(primaryPeer.display_name || primaryPeer.peer_id, "No remote peer yet"));
       setText(appEls.peers, String(quality.peer_count || 0));
       setText(appEls.routes, String(quality.healthy_routes || 0) + "/" + String(quality.route_count || 0));
-      setText(appEls.proof, text(proof.status, "none"));
+      setText(appEls.proof, humanize(text(proof.status, "none")));
       const phoneUrl = withOperatorFragment(text(setup.phone_url || urls.phone_url || urls.app_url, window.location.origin + "/app"));
       setText(appEls.phone, phoneUrl);
+      setText(appEls.primaryPeerLabel, text(primaryPeer.display_name || primaryPeer.peer_id, "No remote peer yet"));
+      setText(appEls.primaryPeerSummary, text(primaryPeer.summary, "Connect another trusted device to build the mesh."));
       renderQr(phoneUrl);
+      if (appEls.story) {{
+        appEls.story.innerHTML = "";
+        const lines = story.length ? story : [text(setup.next_fix, "Press Activate Mesh to discover, repair, enlist, prove, and explain this mesh.")];
+        lines.slice(0, 4).forEach((line) => {{
+          const item = document.createElement("div");
+          item.className = "story-line";
+          item.textContent = String(line);
+          appEls.story.appendChild(item);
+        }});
+      }}
       if (appEls.actions) {{
         const actions = payload.next_actions || [];
         appEls.actions.innerHTML = "";
-        actions.forEach((item) => {{
+        (actions.length ? actions : [text(setup.next_fix, "Press Activate Mesh to discover, repair, enlist, prove, and explain this mesh.")]).forEach((item) => {{
           const li = document.createElement("li");
           li.textContent = String(item);
           appEls.actions.appendChild(li);
+        }});
+      }}
+      if (appEls.deviceRoles) {{
+        const roles = Array.isArray(setup.device_roles) ? setup.device_roles : [];
+        appEls.deviceRoles.innerHTML = "";
+        roles.slice(0, 4).forEach((role) => {{
+          const item = document.createElement("div");
+          item.className = "role-pill";
+          const title = document.createElement("strong");
+          title.textContent = text(role.display_name || role.peer_id, "Peer") + " - " + humanize(text(role.role, "peer"));
+          const summary = document.createElement("span");
+          summary.textContent = text(role.summary, humanize(text(role.status, "unknown")));
+          item.appendChild(title);
+          item.appendChild(summary);
+          appEls.deviceRoles.appendChild(item);
+        }});
+        if (!roles.length) {{
+          const item = document.createElement("div");
+          item.className = "role-pill";
+          const title = document.createElement("strong");
+          title.textContent = "This node - local command";
+          const summary = document.createElement("span");
+          summary.textContent = "Start Mesh Mode and connect another trusted device to expand the mesh.";
+          item.appendChild(title);
+          item.appendChild(summary);
+          appEls.deviceRoles.appendChild(item);
+        }}
+      }}
+      if (appEls.timeline) {{
+        const timeline = (setup.timeline || []).slice(-8);
+        appEls.timeline.innerHTML = "";
+        timeline.forEach((event) => {{
+          const item = document.createElement("div");
+          item.className = "timeline-item";
+          item.dataset.status = text(event.status, "info");
+          const dot = document.createElement("div");
+          dot.className = "timeline-dot";
+          const body = document.createElement("div");
+          const title = document.createElement("strong");
+          title.textContent = humanize(text(event.kind, "event"));
+          const summary = document.createElement("span");
+          summary.textContent = text(event.summary, "OCP recorded a setup event.");
+          body.appendChild(title);
+          body.appendChild(summary);
+          item.appendChild(dot);
+          item.appendChild(body);
+          appEls.timeline.appendChild(item);
         }});
       }}
       if (appEls.routeList) {{
@@ -658,11 +894,23 @@ def build_app_page(mesh: SovereignMesh) -> str:
           const name = document.createElement("strong");
           name.textContent = text(route.display_name || route.peer_id, "Peer");
           const status = document.createElement("span");
-          status.textContent = text(route.operator_summary || route.status, "Route status unknown.");
+          const freshness = text(route.freshness, "");
+          status.textContent = text(route.operator_summary || route.status, "Route status unknown.") + (freshness ? " [" + freshness + "]" : "");
           item.appendChild(name);
           item.appendChild(status);
           appEls.routeList.appendChild(item);
         }});
+        if (!routes.length) {{
+          const item = document.createElement("div");
+          item.className = "route-item";
+          const name = document.createElement("strong");
+          name.textContent = "No peer routes yet";
+          const status = document.createElement("span");
+          status.textContent = "Start Mesh Mode, connect another device, then press Activate Mesh.";
+          item.appendChild(name);
+          item.appendChild(status);
+          appEls.routeList.appendChild(item);
+        }}
       }}
     }};
     const refreshAppStatus = async () => {{
@@ -710,6 +958,65 @@ def build_app_page(mesh: SovereignMesh) -> str:
       }} finally {{
         button.disabled = false;
         button.textContent = original;
+      }}
+    }});
+    document.querySelector("[data-run-best-device]")?.addEventListener("click", async () => {{
+      setText(appEls.summary, "Asking the scheduler which device should run a small OCP-controlled proof job...");
+      try {{
+        const result = await fetchJson("/mesh/jobs/schedule", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify({{
+            request_id: "app-best-device-" + Date.now(),
+            allow_local: true,
+            allow_remote: true,
+            job: {{
+              kind: "shell",
+              requirements: {{ capabilities: ["shell"] }},
+              policy: {{ classification: "trusted", mode: "batch", secret_scopes: [] }},
+              metadata: {{ control_flow: "app_home", demo_action: "run_best_device" }},
+              payload: {{ command: "echo OCP best-device proof" }}
+            }}
+          }})
+        }});
+        const decision = result.decision || result;
+        const target = decision.target_peer_id || decision.peer_id || "selected target";
+        setText(appEls.summary, "Scheduler selected " + target + " for this workload.");
+        await refreshAppStatus();
+      }} catch (error) {{
+        setText(appEls.summary, "Run on Best Device failed: " + error.message);
+      }}
+    }});
+    document.querySelector("[data-replicate-proof-artifact]")?.addEventListener("click", async () => {{
+      try {{
+        const status = await refreshAppStatus();
+        const routes = (((status.route_health || {{}}).routes) || []);
+        const proof = status.latest_proof || {{}};
+        const defaultPeer = routes[0]?.peer_id || "";
+        const defaultArtifact = proof.artifact_id || "";
+        const peerId = window.prompt("Peer id to pull from", defaultPeer);
+        if (!peerId) return;
+        const artifactId = window.prompt("Remote artifact id to replicate", defaultArtifact);
+        if (!artifactId) return;
+        const remoteToken = window.prompt("Remote operator token for that peer (kept in memory only)", "");
+        const payload = {{
+          peer_id: peerId,
+          artifact_id: artifactId,
+          pin: true
+        }};
+        if (remoteToken) {{
+          payload.remote_auth = {{ type: "operator_token", token: remoteToken }};
+        }}
+        setText(appEls.summary, "Replicating and verifying proof artifact from " + peerId + "...");
+        const result = await fetchJson("/mesh/artifacts/replicate", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify(payload)
+        }});
+        setText(appEls.summary, "Replicated " + ((result.artifact || {{}}).digest || artifactId) + " with " + ((result.verification || {{}}).status || "verification") + ".");
+        await refreshAppStatus();
+      }} catch (error) {{
+        setText(appEls.summary, "Replicate Proof Artifact failed: " + error.message);
       }}
     }});
     refreshAppStatus().catch(() => {{}});

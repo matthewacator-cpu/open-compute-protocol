@@ -459,6 +459,79 @@ class MeshArtifactService:
         remote_artifact = remote_client.get_artifact(artifact_token, peer_id=self.mesh.node_id, include_content=include_content)
         return remote_client, remote_artifact, artifact_token
 
+    def _remote_auth_summary(self, remote_auth: Optional[dict]) -> dict:
+        auth = dict(remote_auth or {})
+        auth_type = str(auth.get("type") or "").strip().lower()
+        if not auth_type:
+            return {"type": "none", "status": "not_used"}
+        if auth_type == "operator_token":
+            if not str(auth.get("token") or "").strip():
+                raise self.mesh.MeshPolicyError("remote_auth.operator_token requires a token")
+            return {"type": "operator_token", "status": "used", "redacted": True}
+        if auth_type in {"signed_delegation", "capability_grant"}:
+            raise self.mesh.MeshPolicyError("signed artifact delegation is reserved for a future protocol layer")
+        raise self.mesh.MeshPolicyError(f"unsupported remote_auth type: {auth_type}")
+
+    def _client_with_remote_auth(self, client, remote_auth: Optional[dict]):
+        auth = dict(remote_auth or {})
+        auth_type = str(auth.get("type") or "").strip().lower()
+        if not auth_type:
+            if hasattr(client, "with_operator_token"):
+                return client.with_operator_token("")
+            return client
+        if auth_type == "operator_token":
+            token = str(auth.get("token") or "").strip()
+            if hasattr(client, "with_operator_token"):
+                return client.with_operator_token(token)
+            raise self.mesh.MeshPolicyError("remote operator token auth requires an HTTP peer client")
+        self._remote_auth_summary(auth)
+        return client
+
+    def _fresh_route_for_replication(self, peer_id: str, *, base_url: Optional[str] = None, client=None) -> dict:
+        if client is not None:
+            return {"status": "skipped", "reason": "in_process_client"}
+        peer_token = str(peer_id or "").strip()
+        explicit_base_url = str(base_url or "").strip()
+        if explicit_base_url:
+            probe = self.mesh.probe_routes(peer_id=peer_token, base_url=explicit_base_url, timeout=3.0, limit=1)
+            if int(probe.get("reachable") or 0) <= 0:
+                raise self.mesh.MeshPolicyError("fresh reachable route required before artifact replication")
+            return {
+                "status": "fresh",
+                "best_route": probe.get("best_route") or explicit_base_url,
+                "source": "explicit_probe",
+                "checked_at": probe.get("generated_at") or "",
+            }
+
+        routes = self.mesh.routes_health(limit=50)
+        for route in list(routes.get("routes") or []):
+            route = dict(route or {})
+            if str(route.get("peer_id") or "").strip() != peer_token:
+                continue
+            if (
+                str(route.get("status") or "").strip().lower() == "reachable"
+                and str(route.get("freshness") or "").strip().lower() == "fresh"
+                and str(route.get("best_route") or route.get("last_reachable_base_url") or "").strip()
+            ):
+                return {
+                    "status": "fresh",
+                    "best_route": str(route.get("best_route") or route.get("last_reachable_base_url") or "").strip(),
+                    "source": "route_health",
+                    "checked_at": route.get("checked_at") or "",
+                    "last_success_at": route.get("last_success_at") or "",
+                }
+            break
+
+        probe = self.mesh.probe_routes(peer_id=peer_token, timeout=3.0, limit=4)
+        if int(probe.get("reachable") or 0) <= 0:
+            raise self.mesh.MeshPolicyError("fresh reachable route required before artifact replication")
+        return {
+            "status": "fresh",
+            "best_route": probe.get("best_route") or "",
+            "source": "probe",
+            "checked_at": probe.get("generated_at") or "",
+        }
+
     def artifact_json_payload(self, artifact: dict) -> dict:
         payload_bytes = b""
         if str(artifact.get("content_base64") or "").strip():
@@ -646,6 +719,7 @@ class MeshArtifactService:
         base_url: Optional[str] = None,
         request_id: Optional[str] = None,
         pin: bool = False,
+        remote_auth: Optional[dict] = None,
     ) -> dict:
         peer_token = (peer_id or "").strip()
         if not peer_token:
@@ -671,11 +745,19 @@ class MeshArtifactService:
                 "source": {"peer_id": peer_token, "artifact_id": artifact_token, "digest": digest_token},
             }
 
+        route_proof = self._fresh_route_for_replication(peer_token, base_url=base_url, client=client)
+        if not base_url and route_proof.get("best_route"):
+            base_url = str(route_proof.get("best_route") or "").strip()
+        auth_summary = self._remote_auth_summary(remote_auth)
+        remote_client_override = client
+        if remote_client_override is None and base_url:
+            remote_client_override, _ = self.mesh._resolve_peer_client(peer_token, base_url=base_url)
+            remote_client_override = self._client_with_remote_auth(remote_client_override, remote_auth)
         remote_client, remote_artifact, artifact_token = self.resolve_remote_artifact(
             peer_token,
             artifact_id=artifact_token,
             digest=digest_token,
-            client=client,
+            client=remote_client_override,
             base_url=base_url,
             include_content=False,
         )
@@ -698,9 +780,11 @@ class MeshArtifactService:
                 "status": "already_present",
                 "artifact": local_hit,
                 "source": {"peer_id": peer_token, "artifact_id": artifact_token, "digest": remote_digest},
+                "route_proof": route_proof,
             }
 
-        remote_artifact = remote_client.get_artifact(artifact_token, peer_id=self.mesh.node_id, include_content=True)
+        content_client = self._client_with_remote_auth(remote_client, remote_auth)
+        remote_artifact = content_client.get_artifact(artifact_token, peer_id=self.mesh.node_id, include_content=True)
         content_base64 = str(remote_artifact.get("content_base64") or "").strip()
         if not content_base64:
             raise self.mesh.MeshPolicyError("remote artifact content missing")
@@ -736,6 +820,8 @@ class MeshArtifactService:
                     "source_peer_id": peer_token,
                     "source_artifact_id": source_artifact_id,
                     "source_digest": remote_digest,
+                    "route_proof": route_proof,
+                    "remote_auth": auth_summary,
                     "synced_at": self._utcnow(),
                     "verified_at": verification["checked_at"],
                     "verification_status": verification["status"],
@@ -754,6 +840,8 @@ class MeshArtifactService:
                 "digest": replicated["digest"],
                 "source_artifact_id": source_artifact_id,
                 "pinned": bool(pin),
+                "route_proof": route_proof,
+                "remote_auth": auth_summary,
                 "treaty_requirements": list(governance.get("treaty_requirements") or []),
             },
         )
@@ -762,6 +850,8 @@ class MeshArtifactService:
             "artifact": replicated,
             "source": {"peer_id": peer_token, "artifact_id": source_artifact_id, "digest": remote_digest},
             "verification": verification,
+            "route_proof": route_proof,
+            "remote_auth": auth_summary,
         }
         if governance.get("treaty_requirements"):
             response["governance"] = governance
@@ -777,20 +867,30 @@ class MeshArtifactService:
         base_url: Optional[str] = None,
         request_id: Optional[str] = None,
         pin: bool = False,
+        remote_auth: Optional[dict] = None,
     ) -> dict:
         peer_token = (peer_id or "").strip()
         if not peer_token:
             raise self.mesh.MeshPolicyError("peer_id is required")
+        route_proof = self._fresh_route_for_replication(peer_token, base_url=base_url, client=client)
+        if not base_url and route_proof.get("best_route"):
+            base_url = str(route_proof.get("best_route") or "").strip()
+        auth_summary = self._remote_auth_summary(remote_auth)
+        remote_client_override = client
+        if remote_client_override is None and base_url:
+            remote_client_override, _ = self.mesh._resolve_peer_client(peer_token, base_url=base_url)
+            remote_client_override = self._client_with_remote_auth(remote_client_override, remote_auth)
         remote_client, remote_root, resolved_artifact_id = self.resolve_remote_artifact(
             peer_token,
             artifact_id=artifact_id,
             digest=digest,
-            client=client,
+            client=remote_client_override,
             base_url=base_url,
             include_content=False,
         )
         root_governance = self.ensure_artifact_replication_allowed(peer_token, remote_root)
-        remote_root = remote_client.get_artifact(resolved_artifact_id, peer_id=self.mesh.node_id, include_content=True)
+        content_client = self._client_with_remote_auth(remote_client, remote_auth)
+        remote_root = content_client.get_artifact(resolved_artifact_id, peer_id=self.mesh.node_id, include_content=True)
         root = self.replicate_artifact_from_peer(
             peer_token,
             artifact_id=resolved_artifact_id,
@@ -798,9 +898,10 @@ class MeshArtifactService:
             client=remote_client,
             request_id=request_id,
             pin=pin,
+            remote_auth=remote_auth,
         )
         pending = self.artifact_graph_targets(remote_root)
-        pending.extend(self.artifact_attempt_graph_targets(peer_token, remote_client=remote_client, artifact=remote_root))
+        pending.extend(self.artifact_attempt_graph_targets(peer_token, remote_client=content_client, artifact=remote_root))
         seen: set[tuple[str, str]] = {
             (str(root["artifact"].get("id") or "").strip(), str(root["artifact"].get("digest") or "").strip().lower())
         }
@@ -821,6 +922,7 @@ class MeshArtifactService:
                 client=remote_client,
                 request_id=request_id,
                 pin=pin,
+                remote_auth=remote_auth,
             )
             replicated_children.append(
                 {
@@ -840,6 +942,8 @@ class MeshArtifactService:
                 "root_digest": (root.get("artifact") or {}).get("digest", ""),
                 "replicated_count": len(replicated_children) + 1,
                 "pinned": bool(pin),
+                "route_proof": route_proof,
+                "remote_auth": auth_summary,
             },
         )
         response = {
@@ -852,6 +956,8 @@ class MeshArtifactService:
                 "count": len(replicated_children) + 1,
                 "linked": replicated_children,
             },
+            "route_proof": route_proof,
+            "remote_auth": auth_summary,
         }
         if root_governance.get("treaty_requirements"):
             response["governance"] = root_governance

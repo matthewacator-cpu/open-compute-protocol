@@ -150,13 +150,21 @@ def fetch_app_status(plan: LaunchPlan, *, operator_token: str = "", timeout: flo
 
 def launcher_status_message(payload: dict[str, Any]) -> str:
     setup = dict((payload or {}).get("setup") or {})
+    execution = dict((payload or {}).get("execution_readiness") or {})
+    artifact_sync = dict((payload or {}).get("artifact_sync") or {})
     status = str(setup.get("status") or "").strip().lower()
+    suffix_parts = []
+    if execution.get("status"):
+        suffix_parts.append(str(execution.get("operator_summary") or "").strip())
+    if int(artifact_sync.get("verified_count") or 0):
+        suffix_parts.append(str(artifact_sync.get("operator_summary") or "").strip())
+    suffix = " " + " ".join(part for part in suffix_parts if part) if suffix_parts else ""
     if status == "strong":
-        return "Mesh is strong. Latest proof completed."
+        return "Mesh is strong. Latest proof completed." + suffix
     if status == "proving":
         return "OCP is proving the mesh now..."
     if status == "ready":
-        return "OCP is ready for phone setup. Open the phone link below and press Activate Mesh."
+        return "OCP is ready for phone setup. Open the phone link below and press Activate Mesh." + suffix
     if status == "local_only":
         return "OCP is running local-only. Start Mesh Mode to use your phone or spare laptop."
     if status == "needs_attention":
@@ -274,6 +282,9 @@ class OCPLauncherApp:
         operator_token = self._operator_token_for_mode(plan.mode)
         if operator_token:
             env["OCP_OPERATOR_TOKEN"] = operator_token
+        if ocp_startup.auto_worker_enabled(plan.profile.device_class, plan.profile.form_factor):
+            env.setdefault("OCP_AUTO_REGISTER_WORKER", "1")
+            env.setdefault("OCP_AUTO_WORKER_ID", ocp_startup.default_worker_id(plan.profile.node_id))
         self.process = subprocess.Popen(plan.command, cwd=str(self.repo_root), env=env)
         self.status.set(f"Starting OCP in {plan.mode} mode...")
         self._render_links(plan)

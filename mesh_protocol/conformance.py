@@ -111,6 +111,35 @@ def build_protocol_conformance_snapshot() -> dict[str, Any]:
             },
         ),
         _fixture_entry(
+            "artifact-replicate-request-operator-mediated",
+            schema_ref="ArtifactReplicateRequest",
+            purpose="Explicit operator-mediated artifact pull request without persisting remote credentials.",
+            value={
+                "peer_id": "beta-node",
+                "artifact_id": "artifact-fixture",
+                "pin": True,
+                "remote_auth": {"type": "operator_token", "token": "fixture-token"},
+            },
+        ),
+        _fixture_entry(
+            "artifact-replicate-response-redacted-auth",
+            schema_ref="ArtifactReplicateResponse",
+            purpose="Artifact replication response with route proof and redacted remote auth metadata.",
+            value={
+                "status": "replicated",
+                "artifact": {
+                    "id": "artifact-local",
+                    "digest": "abc123",
+                    "media_type": "application/json",
+                    "artifact_kind": "bundle",
+                },
+                "source": {"peer_id": "beta-node", "artifact_id": "artifact-fixture", "digest": "abc123"},
+                "verification": {"status": "verified", "verified": True},
+                "route_proof": {"status": "fresh", "best_route": "http://192.168.1.22:8421"},
+                "remote_auth": {"type": "operator_token", "status": "used", "redacted": True},
+            },
+        ),
+        _fixture_entry(
             "continuity-restore-request",
             schema_ref="ContinuityRestorePlanRequest",
             purpose="Dry-run restore planning request for a continuity vessel.",
@@ -225,9 +254,54 @@ def build_protocol_conformance_snapshot() -> dict[str, Any]:
                     "healthy_route_count": 1,
                     "route_count": 1,
                     "latest_proof_status": "completed",
+                    "recovery_state": "healthy",
+                    "primary_peer": {
+                        "peer_id": "beta-node",
+                        "display_name": "Beta",
+                        "role": "compute",
+                        "status": "ready",
+                        "route": "http://192.168.1.22:8421",
+                        "summary": "Beta is best for compute right now.",
+                    },
+                    "device_roles": [
+                        {
+                            "peer_id": "alpha-node",
+                            "display_name": "Alpha",
+                            "role": "local_command",
+                            "status": "ready",
+                            "summary": "This Mac is the local command node.",
+                        },
+                        {
+                            "peer_id": "beta-node",
+                            "display_name": "Beta",
+                            "role": "compute",
+                            "status": "ready",
+                            "summary": "Beta is ready for compute work.",
+                        },
+                    ],
                     "blocking_issue": "",
+                    "blocker_code": "",
                     "next_fix": "No fix needed. The current mesh proof completed.",
                     "operator_summary": "Mesh is strong. Devices have proven routes and the latest proof completed.",
+                    "story": [
+                        "Mesh is strong.",
+                        "Beta is best for compute right now.",
+                        "Whole-mesh proof completed.",
+                    ],
+                    "timeline": [
+                        {
+                            "kind": "proof_completed",
+                            "status": "ok",
+                            "summary": "Whole-mesh proof completed.",
+                            "created_at": "2026-01-01T00:00:00Z",
+                        }
+                    ],
+                },
+                "protocol": {
+                    "release": "0.1",
+                    "version": "sovereign-mesh/v1",
+                    "schema_version": SCHEMA_VERSION,
+                    "contract_url": "/mesh/contract",
                 },
                 "autonomy": {"status": "ok", "mode": "assisted", "operator_summary": "Mesh is strong."},
                 "route_health": {
@@ -241,6 +315,30 @@ def build_protocol_conformance_snapshot() -> dict[str, Any]:
                             "candidates": [],
                         }
                     ],
+                },
+                "execution_readiness": {
+                    "status": "ready",
+                    "local": {"worker_count": 1, "ready_worker_count": 1},
+                    "targets": [{"peer_id": "alpha-node", "status": "ready", "reasons": ["local worker registered"]}],
+                    "worker_capacity": [
+                        {
+                            "worker_id": "alpha-default-worker",
+                            "peer_id": "alpha-node",
+                            "status": "active",
+                            "capabilities": ["worker-runtime", "shell"],
+                            "resources": {"cpu": 1},
+                            "max_concurrent_jobs": 1,
+                            "available_slots": 1,
+                        }
+                    ],
+                    "operator_summary": "Execution is ready.",
+                },
+                "artifact_sync": {
+                    "status": "verified",
+                    "replicated_count": 1,
+                    "verified_count": 1,
+                    "items": [],
+                    "operator_summary": "1 replicated artifact(s) verified.",
                 },
                 "latest_proof": {
                     "status": "completed",

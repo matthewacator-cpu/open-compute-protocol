@@ -43,6 +43,7 @@ GET_ROUTE_GROUPS: dict[str, tuple[RouteSpec, ...]] = {
     "runtime": (
         RouteSpec(path="/mesh/contract", handler_name="_handle_mesh_contract"),
         RouteSpec(path="/mesh/app/status", handler_name="_handle_mesh_app_status"),
+        RouteSpec(path="/mesh/app/history", handler_name="_handle_mesh_app_history", argument_kind="params"),
         RouteSpec(path="/mesh/manifest", handler_name="_handle_mesh_manifest"),
         RouteSpec(path="/mesh/device-profile", handler_name="_handle_mesh_device_profile"),
         RouteSpec(path="/mesh/connectivity/diagnostics", handler_name="_handle_mesh_connectivity_diagnostics"),
@@ -87,6 +88,7 @@ POST_ROUTE_GROUPS: dict[str, tuple[RouteSpec, ...]] = {
     "runtime": (
         RouteSpec(path="/mesh/handshake", handler_name="_handle_mesh_handshake", argument_kind="data"),
         RouteSpec(path="/mesh/device-profile", handler_name="_handle_mesh_device_profile_update", argument_kind="data"),
+        RouteSpec(path="/mesh/app/history/sample", handler_name="_handle_mesh_app_history_sample", argument_kind="data"),
         RouteSpec(path="/mesh/autonomy/activate", handler_name="_handle_mesh_autonomy_activate", argument_kind="data"),
         RouteSpec(path="/mesh/routes/probe", handler_name="_handle_mesh_routes_probe", argument_kind="data"),
         RouteSpec(path="/mesh/discovery/seek", handler_name="_handle_mesh_discovery_seek", argument_kind="data"),

@@ -31,14 +31,27 @@ Mac beta app launcher:
 python3 -m ocp_desktop.launcher
 ```
 
+Native SwiftPM Mac Mission Control app:
+
+```bash
+swift run OCPDesktop
+```
+
 Use `Start Local Only` for a private node or `Start Mesh Mode` when you want your phone or spare laptop on the same Wi-Fi to connect. The launcher stores its beta app state under `~/Library/Application Support/OCP/`.
-In Mesh Mode, `Copy Phone Link` includes a private operator token in the URL fragment so the phone app can safely run OCP actions such as `Activate Autonomic Mesh`.
+In Mesh Mode, `Copy Phone Link` includes a private operator token in the URL fragment so the phone app can safely run OCP actions such as `Activate Mesh`.
 
 Build the unsigned Mac beta bundle:
 
 ```bash
 python3 scripts/build_macos_app.py
 open dist/OCP.app
+```
+
+Build the unsigned native SwiftPM beta bundle:
+
+```bash
+python3 scripts/build_swift_macos_app.py
+open "dist/OCP Desktop.app"
 ```
 
 If you prefer the shell starter instead:
@@ -120,6 +133,8 @@ On Windows PowerShell, set environment variables before starting Python:
 $env:OCP_HOST="0.0.0.0"; $env:OCP_NODE_ID="beta-node"; $env:OCP_DISPLAY_NAME="Beta"; python scripts/start_ocp_easy.py
 ```
 
+Do not add a trailing `#` after flags in PowerShell. For example, use `--no-open-browser`, not `--no-open-browser#`.
+
 If you are testing the UI from another machine and the deck is empty, seed activity against the LAN URL:
 
 ```bash
@@ -146,8 +161,22 @@ On machine two:
 OCP_HOST=0.0.0.0 OCP_PORT=8422 OCP_NODE_ID=beta-node OCP_DISPLAY_NAME=Beta python3 scripts/start_ocp_easy.py
 ```
 
-Then open `http://HOST_IP:8421/` on each machine, choose the `Setup` tab, use `Connect Everything`, then `Test Whole Mesh`.
-For the polished flow, open `/app` from the phone and press `Activate Autonomic Mesh`; it will scan, probe routes, plan safe helpers, run a whole-mesh proof, and explain what happened.
+Then open `http://HOST_IP:8421/` on each machine, choose the `Setup Details` tab, use `Connect Everything`, then `Test Whole Mesh`.
+For the polished flow, open `/app` from the phone and press `Activate Mesh`; it will scan, probe routes, plan safe helpers, run a whole-mesh proof, and explain what happened.
+Full laptop/workstation nodes started with `scripts/start_ocp_easy.py` or the Mac launcher advertise a default worker automatically, so the app can also show execution readiness and run the scheduler-backed `Run on Best Device` demo. The native Mac app records local app-status samples through `/mesh/app/history/sample` and renders charts from `/mesh/app/history`.
+
+Private proof artifacts stay protected. To replicate a private artifact from another node, use the app’s `Replicate Proof Artifact` action or send `remote_auth` explicitly:
+
+```json
+{
+  "peer_id": "beta-node",
+  "artifact_id": "REMOTE_ARTIFACT_ID",
+  "pin": true,
+  "remote_auth": {"type": "operator_token", "token": "BETA_OPERATOR_TOKEN"}
+}
+```
+
+OCP uses that remote token only for the outbound fetch, records redacted audit metadata, verifies the digest, and does not store or echo the token.
 
 If scan does not immediately find the other machine, use `Copy My Easy Link` on one computer and paste that address into the manual connect box on the other one.
 You can also scan the QR code from the easy page on the other device and open the pairing link that way.
@@ -158,6 +187,9 @@ You can also scan the QR code from the easy page on the other device and open th
 - Personal Mirror can integrate with it, but is not required to run it.
 - The main operator app is `/`.
 - The app status API is `/mesh/app/status`.
+- The app status API includes setup timeline, execution readiness, artifact sync, and protocol status.
+- The app history APIs are `GET /mesh/app/history` and `POST /mesh/app/history/sample`; they are local operator/app-facing chart surfaces.
 - Autonomic Mesh APIs are `/mesh/autonomy/status`, `/mesh/autonomy/activate`, `/mesh/routes/health`, and `/mesh/routes/probe`.
+- Artifact replication APIs are `/mesh/artifacts/replicate` and `/mesh/artifacts/replicate-graph`; private remote pulls require explicit operator-mediated auth for now.
 - The easy setup module remains at `/easy`.
 - The advanced deck module remains at `/control`.

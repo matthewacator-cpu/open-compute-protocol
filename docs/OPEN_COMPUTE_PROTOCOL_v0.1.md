@@ -149,8 +149,12 @@ The current reference implementation exposes the protocol under `/mesh/*`.
 | `/mesh/jobs/{job_id}/cancel` | POST | Cancel job |
 | `/mesh/artifacts/publish` | POST | Publish artifact |
 | `/mesh/artifacts/{artifact_id}` | GET | Fetch artifact subject to policy |
+| `/mesh/artifacts/replicate` | POST | Pull and verify an artifact from a trusted peer |
+| `/mesh/artifacts/replicate-graph` | POST | Pull a bundle/checkpoint graph from a trusted peer |
 | `/mesh/agents/handoff` | POST | Send explicit delegation packet |
 | `/mesh/app/status` | GET | Operator/app-facing status projection |
+| `/mesh/app/history` | GET | Operator/app-facing persisted status history for local charts |
+| `/mesh/app/history/sample` | POST | Record one redacted app-status sample for chart history |
 | `/mesh/autonomy/status` | GET | Current Autonomic Mesh posture |
 | `/mesh/autonomy/activate` | POST | Assisted discovery, route probing, helper planning, and proof activation |
 | `/mesh/routes/health` | GET | Known route-candidate health projection |
@@ -181,6 +185,16 @@ Artifacts are immutable references to payloads or outputs with:
 
 The v0.1 reference implementation verifies digests and refuses downloads that violate the artifact policy.
 
+Private remote artifact pulls are operator-mediated in v0.1.6. A caller may include:
+
+```json
+{
+  "remote_auth": {"type": "operator_token", "token": "remote-node-token"}
+}
+```
+
+The token is used only for the outbound content fetch, is redacted from responses and events, and is not stored in artifact metadata. Signed scoped delegation grants are reserved for a future capability-law layer.
+
 ## Agent Federation
 
 Agent federation is the first proof target of OCP v0.1.
@@ -207,6 +221,8 @@ The working implementation in this repo intentionally stays pragmatic:
 - Golem is treated as a provider lane, not a trust authority
 - the standalone OCP store remains the local source of truth for mesh runtime state
 - app/autonomy routes are operator-facing control surfaces, not consensus or settlement surfaces
+- `/mesh/app/status` is an operator/app projection that includes setup timeline, execution readiness, artifact sync, route health, and protocol status
+- `/mesh/app/history` and `/mesh/app/history/sample` are local operator/app chart surfaces, not consensus-critical protocol messages
 
 ## Planned OCP v0.2 Themes
 

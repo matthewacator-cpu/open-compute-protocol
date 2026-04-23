@@ -7,12 +7,14 @@ from __future__ import annotations
 import argparse
 import errno
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from mesh import SovereignMesh
 from mesh.sovereign import _normalize_base_url, _preferred_local_base_url
+import ocp_startup
 from runtime import OCPRegistry, OCPStore
 from server_app import build_app_manifest as _build_app_manifest, build_app_page as _build_app_page
 from server_app_status import build_app_status as _build_app_status
@@ -230,6 +232,21 @@ def _bootstrap_mesh(args) -> SovereignMesh:
         or None,
     )
     mesh.network_bind_host = args.host
+    if str(os.environ.get("OCP_AUTO_REGISTER_WORKER") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        worker_id = (
+            os.environ.get("OCP_AUTO_WORKER_ID")
+            or ocp_startup.default_worker_id(args.node_id or mesh.node_id)
+        )
+        mesh.register_worker(
+            worker_id=worker_id,
+            agent_id=args.agent_id,
+            capabilities=["worker-runtime", "shell", "python"],
+            resources={"cpu": 1},
+            labels=["default", "launcher"],
+            max_concurrent_jobs=1,
+            metadata={"source": "ocp_startup", "auto_registered": True},
+            status="active",
+        )
     server_context["mesh"] = mesh
     server_context["runtime"] = {"lattice": lattice, "registry": registry}
     server_context["ready"] = True
