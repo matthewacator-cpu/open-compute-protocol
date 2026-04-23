@@ -277,13 +277,21 @@ class MeshMissionService:
                 cooperative_tasks.append(self.mesh.get_cooperative_task(task_id))
             except Exception as exc:
                 cooperative_tasks.append({"id": task_id, "state": "failed", "error": str(exc), "children": []})
+        resolved_cooperative_jobs: dict[str, dict] = {}
         for task in cooperative_tasks:
             for child in list(task.get("children") or []):
-                job_id = str(child.get("job_id") or ((child.get("job") or {}).get("id")) or "").strip()
+                job = dict(child.get("job") or {})
+                job_id = str(child.get("job_id") or job.get("id") or "").strip()
                 if job_id and job_id not in child_job_ids:
                     child_job_ids.append(job_id)
+                if job_id and job:
+                    job.setdefault("id", job_id)
+                    resolved_cooperative_jobs[job_id] = job
         child_jobs: list[dict] = []
         for job_id in child_job_ids:
+            if job_id in resolved_cooperative_jobs:
+                child_jobs.append(resolved_cooperative_jobs[job_id])
+                continue
             try:
                 child_jobs.append(self.mesh.get_job(job_id))
             except Exception as exc:

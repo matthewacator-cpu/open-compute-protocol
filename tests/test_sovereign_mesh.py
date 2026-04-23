@@ -7537,6 +7537,16 @@ class SovereignMeshTests(unittest.TestCase):
         )
         self.assertEqual(len(mission["lineage"]["cooperative_tasks"]), 1)
 
+        self.assertEqual(alpha.mesh.run_worker_once("alpha-worker")["status"], "completed")
+        self.assertEqual(beta.mesh.run_worker_once("beta-worker")["status"], "completed")
+        refreshed = alpha.mesh.get_mission(mission["id"])
+        self.assertEqual(refreshed["status"], "completed")
+        self.assertEqual(refreshed["summary"]["child_status_counts"], {"completed": 2})
+        self.assertEqual(
+            {job["target"] for job in refreshed["child_jobs"]},
+            {"alpha-node", "beta-node"},
+        )
+
     def test_cooperative_task_endpoints_are_exposed_over_http(self):
         alpha = self.make_stack("alpha")
         beta = self.make_stack("beta")
