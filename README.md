@@ -225,6 +225,10 @@ This native Mission Control shell uses the same OCP server, state paths, operato
 
 The native Mac app now includes a one-click Proof Assistant for the two-device OCP proof. Launch the app, then click **Run Proof Assistant** from the Overview, Setup Doctor, toolbar, or Mesh menu.
 
+<p align="center">
+  <img src="./assets/ocp-proof-assistant.svg" alt="Native Proof Assistant flow" width="100%" />
+</p>
+
 The assistant runs the no-terminal path end to end:
 
 1. Generates and persists an operator token if needed.
